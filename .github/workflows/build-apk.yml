@@ -49,6 +49,20 @@ jobs:
         run: flutter test
         continue-on-error: true
 
+      # Every build must be signed with the SAME key, otherwise Android refuses
+      # to install it as an update (and you'd have to uninstall = lose data).
+      # The key is stored as the repository secret DEBUG_KEYSTORE_BASE64.
+      - name: Use the permanent signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Add the repository secret DEBUG_KEYSTORE_BASE64 (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          mkdir -p ~/.android
+          echo "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > ~/.android/debug.keystore
+
       - name: Build APK
         run: flutter build apk --release
 

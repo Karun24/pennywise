@@ -1,0 +1,48 @@
+name: pennywise
+description: "PennyWise - a private, offline, smart personal expense tracker."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  # Flutter 3.38+ (Dart 3.10+) is required by the current file_picker.
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management (simple, official-recommended, well maintained).
+  provider: ^6.1.5
+  # Local SQLite storage for Android & iOS.
+  sqflite: ^2.4.2
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  # Number / date formatting (Indian digit grouping for INR).
+  intl: ^0.20.2
+  # Backup export (share sheet) and import (system file picker).
+  # Neither needs storage permissions on Android.
+  # The SharePlus/ShareParams API is identical across 11-13; pub picks the
+  # newest one your Flutter version supports.
+  share_plus: ">=11.0.0 <14.0.0"
+  file_picker: ^13.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

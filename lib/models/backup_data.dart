@@ -1,0 +1,19 @@
+import 'category.dart';
+import 'transaction_entry.dart';
+
+/// A complete snapshot of the user's data, used for backup/restore.
+class BackupData {
+  const BackupData({
+    required this.categories,
+    required this.transactions,
+    required this.budgets,
+    required this.settings,
+    this.exportedAt,
+  });
+
+  final List<Category> categories;
+  final List<TransactionEntry> transactions;
+  final List<CategoryBudget> budgets;
+  final Map<String, String> settings;
+  final DateTime? exportedAt;
+}

@@ -391,11 +391,16 @@ class _MonthCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Spent in ${DateUtilsX.monthYear(now)}',
-                  style: context.text.bodySmall),
-              const Spacer(),
-              if (change != null)
-                Pill(label: change, color: changeColor),
+              Expanded(
+                child: Text('Spent in ${DateUtilsX.monthYear(now)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall),
+              ),
+              if (change != null) ...[
+                const SizedBox(width: 8),
+                Flexible(child: Pill(label: change, color: changeColor)),
+              ],
             ],
           ),
           const SizedBox(height: 6),

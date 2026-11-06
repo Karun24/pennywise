@@ -194,7 +194,12 @@ class _SummaryGrid extends StatelessWidget {
                       children: [
                         Icon(icon, size: 16, color: color),
                         const SizedBox(width: 6),
-                        Text(label, style: context.text.bodySmall),
+                        Flexible(
+                          child: Text(label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.text.bodySmall),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -301,10 +306,11 @@ class _IncomeVsExpenseCard extends StatelessWidget {
             title: 'Income vs expenses',
             subtitle: '6 months to ${DateUtilsX.monthYear(anchor)}',
           ),
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
             children: [
               _Legend(color: income, label: 'Income'),
-              const SizedBox(width: 16),
               _Legend(color: expense, label: 'Expenses'),
             ],
           ),
@@ -380,12 +386,13 @@ class _CumulativeCard extends StatelessWidget {
             title: 'Cumulative spending',
             subtitle: 'How this month compares to last month, day by day',
           ),
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
             children: [
               _Legend(
                   color: context.colors.primary,
                   label: DateUtilsX.monthShort(month)),
-              const SizedBox(width: 16),
               _Legend(
                   color: context.penny.textMuted,
                   label: DateUtilsX.monthShort(prevMonth),

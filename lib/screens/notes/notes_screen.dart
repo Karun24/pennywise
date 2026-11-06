@@ -124,7 +124,9 @@ class _NotesScreenState extends State<NotesScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   ChoiceChip(
                     label: Text('All (${store.notes.length})'),
@@ -132,7 +134,6 @@ class _NotesScreenState extends State<NotesScreen> {
                     onSelected: (_) =>
                         setState(() => _filter = _NoteFilter.all),
                   ),
-                  const SizedBox(width: 8),
                   ChoiceChip(
                     avatar: const Icon(Icons.alarm_rounded, size: 16),
                     label: Text('Reminders ($upcoming upcoming)'),

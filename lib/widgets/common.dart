@@ -96,7 +96,7 @@ class SectionHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
           if (actionLabel != null)
             TextButton(
               onPressed: onAction,
@@ -284,19 +284,24 @@ class Pill extends StatelessWidget {
         color: c.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: c),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: context.text.labelSmall
-                ?.copyWith(color: c, fontWeight: FontWeight.w600),
-          ),
-        ],
+      // A single Text (icon as an inline span) so the pill shrinks with an
+      // ellipsis inside tight rows and sizes naturally everywhere else.
+      child: Text.rich(
+        TextSpan(children: [
+          if (icon != null)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(icon, size: 12, color: c),
+              ),
+            ),
+          TextSpan(text: label),
+        ]),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: context.text.labelSmall
+            ?.copyWith(color: c, fontWeight: FontWeight.w600),
       ),
     );
   }

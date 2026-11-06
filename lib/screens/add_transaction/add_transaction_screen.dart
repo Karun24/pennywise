@@ -79,6 +79,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String? _amountError;
   bool _saving = false;
 
+  /// Shown under Smart entry after it fills the form (a snack bar would
+  /// cover the Save button).
+  String? _smartMessage;
+  bool _smartMessageIsWarning = false;
+
   bool get _editing => widget.existing != null;
 
   @override
@@ -190,13 +195,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (p.type == null) 'type',
       if (_categoryId == null) 'category',
     ];
-    showSnack(
-      context,
-      missing.isEmpty
+    setState(() {
+      _smartMessageIsWarning = missing.isNotEmpty;
+      _smartMessage = missing.isEmpty
           ? 'Details filled in. Review them, then tap Save.'
-          : 'Filled what I could. Please choose the ${missing.join(', ')}.',
-      error: missing.isNotEmpty,
-    );
+          : 'Filled what I could. Please choose the ${missing.join(', ')}.';
+    });
   }
 
   Future<void> _save() async {
@@ -312,6 +316,35 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   children: [
                     if (!_editing) ...[
                       SmartEntryCard(onApply: _applyParsed),
+                      if (_smartMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                _smartMessageIsWarning
+                                    ? Icons.info_outline_rounded
+                                    : Icons.check_circle_rounded,
+                                size: 18,
+                                color: _smartMessageIsWarning
+                                    ? context.penny.warning
+                                    : context.penny.income,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _smartMessage!,
+                                  style: context.text.bodySmall?.copyWith(
+                                    color: _smartMessageIsWarning
+                                        ? context.penny.warning
+                                        : context.penny.income,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: 20),
                     ],
                     PennySegmented<TransactionType>(
@@ -367,12 +400,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       children: [
                         Expanded(child: _Label('Category')),
                         if (_autoReason != null && !_categoryManual)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Pill(
-                              icon: Icons.auto_awesome_rounded,
-                              label: 'Auto · $_autoReason',
-                              color: context.penny.accent,
+                          Flexible(
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Pill(
+                                icon: Icons.auto_awesome_rounded,
+                                label: 'Auto · $_autoReason',
+                                color: context.penny.accent,
+                              ),
                             ),
                           ),
                       ],

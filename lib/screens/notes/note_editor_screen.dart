@@ -143,7 +143,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         ));
       } else if (upcoming) {
         messenger.showSnackBar(pennySnack(
-            'Reminder set for ${reminderLabel(at!, DateTime.now())}'));
+            'Reminder set for ${reminderLabel(at, DateTime.now())}'));
       } else {
         messenger.showSnackBar(pennySnack('Note saved'));
       }

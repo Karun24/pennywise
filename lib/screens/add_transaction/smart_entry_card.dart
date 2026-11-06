@@ -80,12 +80,19 @@ class _SmartEntryCardState extends State<SmartEntryCard> {
               Icon(Icons.auto_awesome_rounded,
                   size: 18, color: context.colors.primary),
               const SizedBox(width: 8),
-              Text('Smart entry', style: context.text.titleSmall),
-              const Spacer(),
-              Pill(
-                label: 'On-device rules',
-                icon: Icons.lock_rounded,
-                color: context.penny.accent,
+              Expanded(
+                child: Text('Smart entry',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.titleSmall),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Pill(
+                  label: 'On-device rules',
+                  icon: Icons.lock_rounded,
+                  color: context.penny.accent,
+                ),
               ),
             ],
           ),
@@ -170,13 +177,16 @@ class _SmartEntryCardState extends State<SmartEntryCard> {
                   onPressed: () => setState(() => _result = null),
                   child: const Text('Discard'),
                 ),
-                const Spacer(),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                      minimumSize: const Size(64, 44)),
-                  onPressed: _apply,
-                  icon: const Icon(Icons.check_rounded, size: 18),
-                  label: const Text('Use these details'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                        minimumSize: const Size(64, 44)),
+                    onPressed: _apply,
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: const Text('Use these details',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
                 ),
               ],
             ),

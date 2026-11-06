@@ -1,7 +1,7 @@
 # Builds the PennyWise Android app (APK) on GitHub's free servers and
 # publishes it as a Release you can download straight to your phone.
 # Runs automatically every time you upload/change files, or manually from
-# the Actions tab ("Run workflow").
+# the Actions tab ("Run workflow")..
 name: Build PennyWise APK
 
 on:
@@ -35,7 +35,14 @@ jobs:
       - name: Generate Android platform files
         run: |
           flutter create --org com.pennywise --project-name pennywise --platforms android .
-          sed -i 's/android:label="[^"]*"/android:label="PennyWise"/' android/app/src/main/AndroidManifest.xml
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="[^"]*"/android:label="PennyWise"/' "$M"
+          # Internet is used ONLY for the optional "check for updates" feature;
+          # the https query lets the app open the download link in a browser.
+          if ! grep -q 'android.permission.INTERNET' "$M"; then
+            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <queries>\n        <intent>\n            <action android:name="android.intent.action.VIEW"/>\n            <data android:scheme="https"/>\n        </intent>\n    </queries>\n    <application#' "$M"
+          fi
+          cat "$M"
 
       - name: Get packages
         run: flutter pub get
@@ -64,13 +71,20 @@ jobs:
           echo "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > ~/.android/debug.keystore
 
       - name: Build APK
-        run: flutter build apk --release
+        run: >
+          flutter build apk --release
+          --build-number=${{ github.run_number }}
+          --build-name=1.0.${{ github.run_number }}
+          --dart-define=BUILD_NUMBER=${{ github.run_number }}
+          --dart-define=UPDATE_REPO=${{ github.repository }}
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk PennyWise.apk
+          # The commit message becomes the "What's new" text in the app.
+          git log -1 --pretty=%B > notes.txt
           gh release create "build-${{ github.run_number }}" PennyWise.apk \
-            --title "PennyWise build ${{ github.run_number }}" \
-            --notes "Download PennyWise.apk on your phone and tap it to install."
+            --title "PennyWise 1.0.${{ github.run_number }}" \
+            --notes-file notes.txt

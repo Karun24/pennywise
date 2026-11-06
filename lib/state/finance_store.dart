@@ -4,9 +4,11 @@ import '../database/default_categories.dart';
 import '../models/app_settings.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/note.dart';
 import '../models/transaction_entry.dart';
 import '../repositories/finance_repository.dart';
 import '../services/budget_service.dart';
+import '../services/reminder_service.dart';
 import '../services/smart/categorizer.dart';
 import '../services/smart/insights_engine.dart';
 import '../services/smart/transaction_parser.dart';
@@ -24,17 +26,23 @@ class StoreException implements Exception {
 /// (fine for a personal ledger of thousands of rows) and writes through to
 /// the [FinanceRepository].
 class FinanceStore extends ChangeNotifier {
-  FinanceStore(this._repo, {DateTime Function()? clock})
-      : _clock = clock ?? DateTime.now;
+  FinanceStore(
+    this._repo, {
+    DateTime Function()? clock,
+    ReminderScheduler reminders = const NoopReminderScheduler(),
+  })  : _clock = clock ?? DateTime.now,
+        _reminders = reminders;
 
   final FinanceRepository _repo;
   final DateTime Function() _clock;
+  final ReminderScheduler _reminders;
 
   bool _loading = true;
   String? _loadError;
   List<Category> _categories = const [];
   List<TransactionEntry> _transactions = const [];
   List<CategoryBudget> _budgets = const [];
+  List<Note> _notes = const [];
   AppSettings _settings = const AppSettings();
   Map<int, Category> _categoryIndex = const {};
 
@@ -50,6 +58,24 @@ class FinanceStore extends ChangeNotifier {
   List<Category> get categories => _categories;
   List<TransactionEntry> get transactions => _transactions;
   List<CategoryBudget> get budgets => _budgets;
+  ReminderScheduler get reminders => _reminders;
+
+  /// Pinned first, then most recently edited.
+  List<Note> get notes => _notes;
+
+  /// Notes with a reminder still in the future, soonest first.
+  List<Note> get upcomingReminders {
+    final t = now;
+    return _notes.where((n) => n.hasUpcomingReminder(t)).toList()
+      ..sort((a, b) => a.reminderAt!.compareTo(b.reminderAt!));
+  }
+
+  Note? noteById(int id) {
+    for (final n in _notes) {
+      if (n.id == id) return n;
+    }
+    return null;
+  }
   AppSettings get settings => _settings;
   CurrencyInfo get currency => CurrencyInfo.byCode(_settings.currencyCode);
   DateTime get now => _clock();
@@ -85,11 +111,17 @@ class FinanceStore extends ChangeNotifier {
       _repo.getTransactions(),
       _repo.getBudgets(),
       _repo.getSettings(),
+      _repo.getNotes(),
     ]);
     _categories = results[0] as List<Category>;
     _transactions = results[1] as List<TransactionEntry>;
     _budgets = results[2] as List<CategoryBudget>;
     _settings = AppSettings.fromKeyValues(results[3] as Map<String, String>);
+    _notes = List<Note>.of(results[4] as List<Note>)
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
     _categoryIndex = {for (final c in _categories) c.id!: c};
     _version++;
     _categorizer = null;
@@ -226,6 +258,59 @@ class FinanceStore extends ChangeNotifier {
     });
   }
 
+  // -------------------------------------------------------------------- notes
+
+  /// Creates or updates a note and (re)schedules its reminder.
+  /// Returns false if the reminder could not be scheduled.
+  Future<({Note note, bool reminderOk})> saveNote(Note note) {
+    return _guard('save the note', () async {
+      final errors = note.validate();
+      if (errors.isNotEmpty) throw StoreException(errors.first);
+      final stamp = now;
+      final Note stored;
+      if (note.id == null) {
+        stored = await _repo.insertNote(
+            note.copyWith(createdAt: stamp, updatedAt: stamp));
+      } else {
+        stored = note.copyWith(updatedAt: stamp);
+        await _repo.updateNote(stored);
+      }
+      await _reloadAll();
+      notifyListeners();
+      final ok = await _reminders.schedule(stored);
+      return (note: stored, reminderOk: ok);
+    });
+  }
+
+  Future<void> setNotePinned(Note note, bool pinned) {
+    return _guard('update the note', () async {
+      await _repo.updateNote(note.copyWith(pinned: pinned));
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  Future<void> deleteNote(Note note) {
+    return _guard('delete the note', () async {
+      await _repo.deleteNote(note.id!);
+      await _reminders.cancel(note.id!);
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  /// Re-creates a deleted note (used by "Undo").
+  Future<void> restoreNote(Note note) async {
+    await saveNote(Note(
+      title: note.title,
+      body: note.body,
+      pinned: note.pinned,
+      reminderAt: note.reminderAt,
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+    ));
+  }
+
   // ------------------------------------------------------------------ budgets
 
   BudgetOverview budgetOverview() => BudgetService.compute(
@@ -311,24 +396,38 @@ class FinanceStore extends ChangeNotifier {
         transactions: _transactions,
         budgets: _budgets,
         settings: _settings.toKeyValues(),
+        notes: _notes,
         exportedAt: now,
       );
 
   Future<void> restore(BackupData data) {
     return _guard('restore the backup', () async {
+      final old = _notes;
       await _repo.replaceAll(data);
       await _repo.init();
       await _reloadAll();
       notifyListeners();
+      await _resyncReminders(old);
     });
   }
 
   Future<void> clearAll() {
     return _guard('clear your data', () async {
+      final old = _notes;
       await _repo.clearAll();
       await _reloadAll();
       notifyListeners();
+      await _resyncReminders(old);
     });
+  }
+
+  Future<void> _resyncReminders(List<Note> previous) async {
+    for (final n in previous) {
+      if (n.id != null) await _reminders.cancel(n.id!);
+    }
+    for (final n in _notes) {
+      await _reminders.schedule(n);
+    }
   }
 
   Future<void> insertMany(List<TransactionEntry> entries) {

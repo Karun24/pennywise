@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/note.dart';
 import '../models/transaction_entry.dart';
 import '../utils/money.dart';
 
@@ -18,7 +19,8 @@ class BackupService {
   BackupService._();
 
   static const formatId = 'pennywise-backup';
-  static const formatVersion = 1;
+  /// 1 = transactions/categories/budgets/settings, 2 = + notes.
+  static const formatVersion = 2;
 
   static String encode(BackupData data) {
     final json = {
@@ -29,6 +31,7 @@ class BackupService {
       'transactions': data.transactions.map((t) => t.toMap()).toList(),
       'budgets': data.budgets.map((b) => b.toMap()).toList(),
       'settings': data.settings,
+      'notes': data.notes.map((n) => n.toMap()).toList(),
     };
     return const JsonEncoder.withIndent('  ').convert(json);
   }
@@ -79,12 +82,24 @@ class BackupService {
         rawSettings.forEach((k, v) => settings[k.toString()] = '${v ?? ''}');
       }
 
+      // Notes were added in version 2; older backups simply have none.
+      final notes = map['notes'] == null
+          ? <Note>[]
+          : list('notes').map(Note.fromMap).toList();
+      final noteIds = <int>{};
+      for (final n in notes) {
+        if (n.id == null || !noteIds.add(n.id!)) {
+          throw const BackupFormatException('Duplicate or missing note id.');
+        }
+      }
+
       _validate(categories, transactions, budgets);
       return BackupData(
         categories: categories,
         transactions: transactions,
         budgets: budgets,
         settings: settings,
+        notes: notes,
         exportedAt: DateTime.tryParse('${map['exportedAt']}'),
       );
     } on BackupFormatException {

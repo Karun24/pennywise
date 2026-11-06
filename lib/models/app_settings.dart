@@ -17,6 +17,7 @@ class AppSettings {
     this.currencyCode = 'INR',
     this.monthlyBudgetMinor,
     this.startingBalanceMinor = 0,
+    this.autoUpdateCheck = true,
   });
 
   final AppThemePreference theme;
@@ -28,10 +29,14 @@ class AppSettings {
   /// Money the user already had before they started tracking.
   final int startingBalanceMinor;
 
+  /// Check GitHub for a newer version when the app starts.
+  final bool autoUpdateCheck;
+
   static const keyTheme = 'theme';
   static const keyCurrency = 'currency';
   static const keyMonthlyBudget = 'monthly_budget_minor';
   static const keyStartingBalance = 'starting_balance_minor';
+  static const keyAutoUpdateCheck = 'auto_update_check';
 
   AppSettings copyWith({
     AppThemePreference? theme,
@@ -39,6 +44,7 @@ class AppSettings {
     int? monthlyBudgetMinor,
     bool clearMonthlyBudget = false,
     int? startingBalanceMinor,
+    bool? autoUpdateCheck,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -47,6 +53,7 @@ class AppSettings {
           ? null
           : (monthlyBudgetMinor ?? this.monthlyBudgetMinor),
       startingBalanceMinor: startingBalanceMinor ?? this.startingBalanceMinor,
+      autoUpdateCheck: autoUpdateCheck ?? this.autoUpdateCheck,
     );
   }
 
@@ -55,6 +62,7 @@ class AppSettings {
         keyCurrency: currencyCode,
         keyMonthlyBudget: monthlyBudgetMinor?.toString() ?? '',
         keyStartingBalance: startingBalanceMinor.toString(),
+        keyAutoUpdateCheck: autoUpdateCheck ? '1' : '0',
       };
 
   factory AppSettings.fromKeyValues(Map<String, String> kv) {
@@ -66,6 +74,7 @@ class AppSettings {
           : 'INR',
       monthlyBudgetMinor: (budget != null && budget > 0) ? budget : null,
       startingBalanceMinor: int.tryParse(kv[keyStartingBalance] ?? '') ?? 0,
+      autoUpdateCheck: kv[keyAutoUpdateCheck] != '0',
     );
   }
 }

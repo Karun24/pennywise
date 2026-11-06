@@ -5,13 +5,17 @@ import '../../models/app_settings.dart';
 import '../../services/backup_file_service.dart';
 import '../../services/backup_service.dart';
 import '../../services/demo_data.dart';
+import '../../services/update_service.dart';
 import '../../state/finance_store.dart';
+import '../../state/update_controller.dart';
 import '../../theme/theme_ext.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/money.dart';
 import '../../widgets/common.dart';
 import '../../widgets/dialogs.dart';
 import '../../widgets/segmented.dart';
+import '../../widgets/update_widgets.dart';
+import '../notes/notes_screen.dart';
 import 'manage_categories_screen.dart';
 
 /// Profile & settings: preferences, money, categories, data, privacy.
@@ -82,6 +86,12 @@ class SettingsScreen extends StatelessWidget {
                 value: '${store.categories.length}',
                 onTap: () => ManageCategoriesScreen.open(context),
               ),
+              _Tile(
+                icon: Icons.sticky_note_2_rounded,
+                title: 'Notes & reminders',
+                value: '${store.notes.length}',
+                onTap: () => NotesScreen.open(context),
+              ),
             ]),
             const SizedBox(height: 22),
             const _GroupTitle('Your data'),
@@ -120,6 +130,9 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 22),
+            const _GroupTitle('App updates'),
+            const _UpdatesGroup(),
+            const SizedBox(height: 22),
             const _GroupTitle('About'),
             _SettingsGroup(children: [
               _Tile(
@@ -127,10 +140,10 @@ class SettingsScreen extends StatelessWidget {
                 title: 'How smart features work',
                 onTap: () => _explainSmart(context),
               ),
-              const _Tile(
+              _Tile(
                 icon: Icons.info_outline_rounded,
                 title: 'PennyWise',
-                value: 'v1.0.0',
+                value: AppBuildInfo.versionLabel,
               ),
             ]),
           ],
@@ -327,8 +340,9 @@ class SettingsScreen extends StatelessWidget {
       context,
       title: 'Clear all data?',
       message: 'This permanently deletes all ${store.transactions.length} '
-          'transactions, budgets, custom categories and settings on this '
-          'device. This cannot be undone.',
+          'transactions, ${store.notes.length} notes and their reminders, '
+          'budgets, custom categories and settings on this device. This '
+          'cannot be undone.',
       confirmLabel: 'Continue',
       destructive: true,
     );
@@ -445,7 +459,8 @@ class _PrivacyBanner extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '$count transaction${count == 1 ? '' : 's'} stored only on '
-                  'this device. No account, no ads, no trackers.',
+                  'this device. No account, no ads, no trackers. Your '
+                  'financial data never leaves your phone.',
                   style: context.text.bodySmall
                       ?.copyWith(color: Colors.white.withValues(alpha: 0.8)),
                 ),
@@ -533,5 +548,101 @@ class _Tile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Version info, manual "Check for updates" and the auto-check switch.
+class _UpdatesGroup extends StatelessWidget {
+  const _UpdatesGroup();
+
+  Future<void> _check(BuildContext context) async {
+    final updates = context.read<UpdateController>();
+    final messenger = ScaffoldMessenger.of(context);
+    await updates.check();
+    if (!context.mounted) return;
+    switch (updates.status) {
+      case UpdateStatus.available:
+        showUpdateSheet(context, updates.available!);
+      case UpdateStatus.upToDate:
+        messenger.showSnackBar(pennySnack('You have the latest version.'));
+      case UpdateStatus.error:
+        messenger.showSnackBar(pennySnack(
+            updates.error ?? 'Could not check for updates.',
+            error: true));
+      case UpdateStatus.notConfigured:
+      case UpdateStatus.idle:
+      case UpdateStatus.checking:
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final updates = context.watch<UpdateController>();
+    final store = context.watch<FinanceStore>();
+    final settings = store.settings;
+
+    if (!updates.isConfigured) {
+      return const _SettingsGroup(children: [
+        _Tile(
+          icon: Icons.system_update_rounded,
+          title: 'Updates',
+          subtitle: 'Available in builds made by GitHub. This build was '
+              'made on a computer, so update checks are off.',
+        ),
+      ]);
+    }
+
+    final String subtitle;
+    switch (updates.status) {
+      case UpdateStatus.checking:
+        subtitle = 'Checking...';
+      case UpdateStatus.available:
+        subtitle =
+            'Version 1.0.${updates.available!.buildNumber} is available';
+      case UpdateStatus.upToDate:
+        subtitle = 'You have the latest version';
+      case UpdateStatus.error:
+        subtitle = updates.error ?? 'Could not check for updates';
+      case UpdateStatus.idle:
+      case UpdateStatus.notConfigured:
+        subtitle = 'Installed: ${AppBuildInfo.versionLabel}';
+    }
+
+    return _SettingsGroup(children: [
+      _Tile(
+        icon: updates.hasUpdate
+            ? Icons.system_update_rounded
+            : Icons.refresh_rounded,
+        title: updates.hasUpdate ? 'Install update' : 'Check for updates',
+        subtitle: subtitle,
+        onTap: updates.status == UpdateStatus.checking
+            ? null
+            : () => updates.hasUpdate
+                ? showUpdateSheet(context, updates.available!)
+                : _check(context),
+      ),
+      SwitchListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+        secondary: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: context.colors.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(Icons.autorenew_rounded,
+              size: 20, color: context.colors.primary),
+        ),
+        title: Text('Check automatically', style: context.text.titleSmall),
+        subtitle: Text(
+          'Looks for a new version on GitHub when the app opens. '
+          'No personal or financial data is sent.',
+          style: context.text.bodySmall,
+        ),
+        value: settings.autoUpdateCheck,
+        onChanged: (v) => SettingsScreen._save(
+            context, settings.copyWith(autoUpdateCheck: v)),
+      ),
+    ]);
   }
 }

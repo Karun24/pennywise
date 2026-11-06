@@ -39,6 +39,7 @@ class DateUtilsX {
   static final DateFormat _monthShort = DateFormat('MMM');
   static final DateFormat _weekdayShort = DateFormat('E');
   static final DateFormat _fullDay = DateFormat('EEEE, d MMM');
+  static final DateFormat _time = DateFormat('h:mm a');
 
   static String dayMonth(DateTime d) => _dayMonth.format(d);
   static String dayMonthYear(DateTime d) => _dayMonthYear.format(d);
@@ -46,6 +47,7 @@ class DateUtilsX {
   static String monthShort(DateTime d) => _monthShort.format(d);
   static String weekdayShort(DateTime d) => _weekdayShort.format(d);
   static String fullDay(DateTime d) => _fullDay.format(d);
+  static String time(DateTime d) => _time.format(d);
 
   /// "Today", "Yesterday" or a formatted date.
   static String relativeDay(DateTime d, {DateTime? now}) {

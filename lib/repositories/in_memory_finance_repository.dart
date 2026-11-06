@@ -1,6 +1,7 @@
 import '../database/default_categories.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/note.dart';
 import '../models/transaction_entry.dart';
 import 'finance_repository.dart';
 
@@ -10,8 +11,10 @@ class InMemoryFinanceRepository implements FinanceRepository {
   final List<TransactionEntry> _transactions = [];
   final Map<int, CategoryBudget> _budgets = {};
   final Map<String, String> _settings = {};
+  final List<Note> _notes = [];
   int _nextCategoryId = 1;
   int _nextTransactionId = 1;
+  int _nextNoteId = 1;
 
   @override
   Future<void> init() async {
@@ -111,6 +114,29 @@ class InMemoryFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Future<List<Note>> getNotes() async => List<Note>.of(_notes)
+    ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+  @override
+  Future<Note> insertNote(Note note) async {
+    final stored = note.copyWith(id: _nextNoteId++);
+    _notes.add(stored);
+    return stored;
+  }
+
+  @override
+  Future<void> updateNote(Note note) async {
+    final i = _notes.indexWhere((n) => n.id == note.id);
+    if (i < 0) throw StateError('Note ${note.id} no longer exists.');
+    _notes[i] = note;
+  }
+
+  @override
+  Future<void> deleteNote(int id) async {
+    _notes.removeWhere((n) => n.id == id);
+  }
+
+  @override
   Future<Map<String, String>> getSettings() async => Map.of(_settings);
 
   @override
@@ -132,10 +158,14 @@ class InMemoryFinanceRepository implements FinanceRepository {
     _settings
       ..clear()
       ..addAll(data.settings);
+    _notes
+      ..clear()
+      ..addAll(data.notes);
     int maxId(Iterable<int?> ids) =>
         ids.fold<int>(0, (m, id) => (id ?? 0) > m ? id! : m);
     _nextCategoryId = maxId(_categories.map((c) => c.id)) + 1;
     _nextTransactionId = maxId(_transactions.map((t) => t.id)) + 1;
+    _nextNoteId = maxId(_notes.map((n) => n.id)) + 1;
   }
 
   @override
@@ -144,8 +174,10 @@ class InMemoryFinanceRepository implements FinanceRepository {
     _transactions.clear();
     _budgets.clear();
     _settings.clear();
+    _notes.clear();
     _nextCategoryId = 1;
     _nextTransactionId = 1;
+    _nextNoteId = 1;
     _seed();
   }
 }

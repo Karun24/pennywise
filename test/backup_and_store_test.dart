@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pennywise/database/default_categories.dart';
 import 'package:pennywise/models/category.dart';
+import 'package:pennywise/models/note.dart';
 import 'package:pennywise/models/transaction_entry.dart';
 import 'package:pennywise/repositories/in_memory_finance_repository.dart';
 import 'package:pennywise/services/backup_service.dart';
+import 'package:pennywise/services/reminder_service.dart';
 import 'package:pennywise/state/finance_store.dart';
 import 'package:pennywise/utils/money.dart';
 
@@ -149,4 +151,85 @@ void main() {
     expect(s.transactions, isEmpty);
     expect(s.categories.length, buildDefaultCategories().length);
   });
+
+  group('notes', () {
+    Note draft({String title = 'Rent', DateTime? at}) => Note(
+          title: title,
+          body: 'Pay landlord',
+          reminderAt: at,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+    test('save, edit, pin and delete a note; reminder is scheduled', () async {
+      final reminders = _FakeReminders();
+      final s = FinanceStore(InMemoryFinanceRepository(),
+          clock: () => now, reminders: reminders);
+      await s.load();
+
+      final at = now.add(const Duration(days: 1));
+      final saved = (await s.saveNote(draft(at: at))).note;
+      expect(s.notes.single.title, 'Rent');
+      expect(s.upcomingReminders.single.reminderAt, at);
+      expect(reminders.scheduled, [saved.id]);
+
+      await s.saveNote(saved.copyWith(title: 'Rent due'));
+      expect(s.notes.single.title, 'Rent due');
+
+      await s.setNotePinned(s.notes.single, true);
+      expect(s.notes.single.pinned, isTrue);
+
+      await s.deleteNote(s.notes.single);
+      expect(s.notes, isEmpty);
+      expect(reminders.cancelled, contains(saved.id));
+    });
+
+    test('empty notes are rejected', () async {
+      final s = await newStore();
+      await expectLater(s.saveNote(draft(title: '').copyWith(body: '')),
+          throwsA(isA<StoreException>()));
+    });
+
+    test('notes are included in backups; old backups still restore',
+        () async {
+      final s = await newStore();
+      await s.saveNote(draft(at: now.add(const Duration(hours: 2))));
+      final decoded = BackupService.decode(BackupService.encode(s.snapshot()));
+      expect(decoded.notes.single.title, 'Rent');
+
+      final other = await newStore();
+      await other.restore(decoded);
+      expect(other.notes.single.body, 'Pay landlord');
+
+      // A version-1 backup has no "notes" section.
+      final v1 = BackupService.encode(s.snapshot())
+          .replaceFirst('"version": 2', '"version": 1');
+      final old = BackupService.decode(v1.replaceAll(
+          RegExp(r',\s*"notes": \[[\s\S]*\]\s*}\s*$'), '\n}'));
+      expect(old.notes, isEmpty);
+    });
+  });
+}
+
+class _FakeReminders implements ReminderScheduler {
+  final scheduled = <int>[];
+  final cancelled = <int>[];
+
+  @override
+  Future<void> init({void Function(int noteId)? onOpenNote}) async {}
+
+  @override
+  Future<bool> requestPermission() async => true;
+
+  @override
+  Future<bool> schedule(Note note) async {
+    if (note.reminderAt != null) scheduled.add(note.id!);
+    return true;
+  }
+
+  @override
+  Future<void> cancel(int noteId) async => cancelled.add(noteId);
+
+  @override
+  Future<int?> launchedFromNote() async => null;
 }

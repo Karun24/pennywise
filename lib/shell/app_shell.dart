@@ -9,6 +9,7 @@ import '../screens/home/home_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../state/finance_store.dart';
 import '../state/shell_controller.dart';
+import '../state/update_controller.dart';
 import '../theme/theme_ext.dart';
 import '../widgets/common.dart';
 import 'penny_bottom_bar.dart';
@@ -22,6 +23,7 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final shell = context.watch<ShellController>();
     final store = context.watch<FinanceStore>();
+    final hasUpdate = context.select<UpdateController, bool>((u) => u.hasUpdate);
 
     final overlay = context.isDark
         ? SystemUiOverlayStyle.light.copyWith(
@@ -71,6 +73,7 @@ class AppShell extends StatelessWidget {
             current: shell.tab,
             onSelect: shell.go,
             onAdd: () => AddTransactionScreen.open(context),
+            profileBadge: hasUpdate,
           ),
         ),
       ),

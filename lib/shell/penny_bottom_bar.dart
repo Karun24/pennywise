@@ -11,11 +11,15 @@ class PennyBottomBar extends StatelessWidget {
     required this.current,
     required this.onSelect,
     required this.onAdd,
+    this.profileBadge = false,
   });
 
   final AppTab current;
   final ValueChanged<AppTab> onSelect;
   final VoidCallback onAdd;
+
+  /// Shows a dot on Profile (e.g. when an app update is available).
+  final bool profileBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +61,7 @@ class PennyBottomBar extends StatelessWidget {
                 icon: Icons.person_outline_rounded,
                 activeIcon: Icons.person_rounded,
                 label: 'Profile',
+                badge: profileBadge,
                 selected: current == AppTab.settings,
                 onTap: () => onSelect(AppTab.settings),
               ),
@@ -75,8 +80,10 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.badge = false,
   });
 
+  final bool badge;
   final IconData icon;
   final IconData activeIcon;
   final String label;
@@ -108,7 +115,13 @@ class _NavItem extends StatelessWidget {
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(selected ? activeIcon : icon, color: color, size: 22),
+                child: Badge(
+                  isLabelVisible: badge,
+                  smallSize: 8,
+                  backgroundColor: context.penny.accent,
+                  child: Icon(selected ? activeIcon : icon,
+                      color: color, size: 22),
+                ),
               ),
               const SizedBox(height: 4),
               Text(

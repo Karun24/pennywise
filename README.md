@@ -3,7 +3,7 @@
 A private, offline, "smart" personal expense tracker for Android and iOS, built with Flutter.
 
 - **Zero cost to run** – no accounts, no servers, no paid APIs, no ads, no trackers.
-- **Your data stays on your phone** – stored in a local SQLite database in the app's private storage. The release app requests no Android permissions (none of the plugins add any).
+- **Your data stays on your phone** – stored in a local SQLite database in the app's private storage. Your financial data never leaves the phone. The only network use is the optional update check (GitHub builds only).
 - **Smart, but honest** – auto-categorisation, natural-language entry, insights and unusual-spend detection are **rule-based and statistical, running on the device**. No generative AI or cloud model is used, and the app says so.
 
 ---
@@ -19,6 +19,7 @@ A private, offline, "smart" personal expense tracker for Android and iOS, built 
 | Analytics | Week / Month / Year with previous/next navigation, spent / earned / net / average-per-day, daily or monthly trend, income vs expenses (6 months), cumulative this-month vs last-month line, weekly totals (8 weeks), category breakdown, income by source, largest expenses. Tap or drag charts to see exact values |
 | Budgets | Monthly budget ring with % used, remaining, safe daily spend and month-end projection; per-category budgets; warnings at 75 % and 90 %, alert when exceeded, instant alert after saving an expense that crosses a threshold |
 | Insights | Month-to-date vs same period last month, week-over-week category increases, top category, average daily spend, savings rate, budget pace, unusual transactions (≥3× median and > mean + 2σ), many small discretionary purchases, no-spend days. Every number comes from your data; with no data there are no insights |
+| Notes & reminders | Free-form notes (title + text), pin to top, search, filter by reminders. Add a reminder with presets (in 30 min, in 1 hour, today 8 PM, tomorrow 9 AM, next week) or any date & time; the phone shows a notification at that time even when the app is closed, and tapping it opens the note. Reminders survive restarts and are included in backups |
 | Settings | Theme (System / Light / Dark), currency (INR default + 8 others, display only), monthly budget, starting balance, manage categories, export JSON backup, export CSV, import backup (validated before anything is replaced), demo data, clear all data (double confirmation) |
 
 ## Architecture
@@ -51,7 +52,7 @@ Key decisions:
 - **Optional AI later** – the smart layer is three pure classes (`Categorizer`, `TransactionParser`, `InsightsEngine`). A future AI-backed implementation can sit beside them behind `FinanceStore` and fall back to the local rules when offline or not configured.
 - **Schema versioning** – `AppDatabase.schemaVersion` + `_onUpgrade` for safe migrations; backups carry a `format` and `version` and are fully validated before restore.
 
-Dependencies (all free, open source): `provider`, `sqflite`, `path`, `path_provider`, `intl`, `share_plus`, `file_picker`. Font: Inter (SIL Open Font License, bundled).
+Dependencies (all free, open source): `provider`, `sqflite`, `path`, `path_provider`, `intl`, `share_plus`, `file_picker`, `url_launcher`, `flutter_local_notifications`, `timezone`. Font: Inter (SIL Open Font License, bundled).
 
 ## Requirements
 
@@ -92,9 +93,19 @@ Tip: in the app, *Profile → Load demo data* (only shown when there are no tran
 
 The code is iOS-ready (all packages support iOS), but building requires a Mac with Xcode. `file_picker` needs iOS 14+: set `platform :ios, '14.0'` in `ios/Podfile` (or the deployment target in Xcode).
 
+## In-app updates (GitHub builds)
+
+APKs built by the GitHub workflow know their own build number and repository. When the app opens it asks GitHub for the latest release; if a newer build exists, a **"Update available"** card appears on the dashboard and a dot appears on **Profile**. Tapping **Update** shows what's new (your commit message), offers a backup, and downloads the new APK in the browser; the user opens it and taps **Update**. Data is kept because every build is signed with the same key.
+
+Requirements:
+- The repository must be **public** (GitHub only lets apps read releases of public repositories without a password). Your financial data is never in the repository.
+- The `DEBUG_KEYSTORE_BASE64` secret must be set (permanent signing key).
+
+Privacy: the check is a single request to `api.github.com` for public release information. No personal or financial data is sent. It can be turned off in **Profile → App updates → Check automatically**. Builds made locally with `setup.ps1` have update checks switched off.
+
 ## Privacy
 
-- No analytics, ads, crash reporters or network calls.
+- No analytics, ads or crash reporters. The only network call is the optional update check.
 - Backups are only created when you tap *Export*, and go only where you choose in the share sheet.
 - Imported backups are validated (format, version, ids, amounts, category references) before the existing data is replaced in a single database transaction.
 - CSV export neutralises spreadsheet formula injection.

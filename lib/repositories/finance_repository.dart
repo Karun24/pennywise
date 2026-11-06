@@ -1,5 +1,6 @@
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/note.dart';
 import '../models/transaction_entry.dart';
 
 /// Storage abstraction used by the app's state layer.
@@ -28,6 +29,11 @@ abstract class FinanceRepository {
   Future<List<CategoryBudget>> getBudgets();
   Future<void> upsertBudget(CategoryBudget budget);
   Future<void> deleteBudget(int categoryId);
+
+  Future<List<Note>> getNotes();
+  Future<Note> insertNote(Note note);
+  Future<void> updateNote(Note note);
+  Future<void> deleteNote(int id);
 
   Future<Map<String, String>> getSettings();
   Future<void> saveSettings(Map<String, String> values);

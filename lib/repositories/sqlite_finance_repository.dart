@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../database/app_database.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/note.dart';
 import '../models/transaction_entry.dart';
 import 'finance_repository.dart';
 
@@ -16,6 +17,7 @@ class SqliteFinanceRepository implements FinanceRepository {
   static const _t = AppDatabase.tTransactions;
   static const _b = AppDatabase.tBudgets;
   static const _s = AppDatabase.tSettings;
+  static const _n = AppDatabase.tNotes;
 
   @override
   Future<void> init() async {
@@ -114,6 +116,32 @@ class SqliteFinanceRepository implements FinanceRepository {
     await _db.delete(_b, where: 'category_id = ?', whereArgs: [categoryId]);
   }
 
+  // --------------------------------------------------------------------- notes
+
+  @override
+  Future<List<Note>> getNotes() async {
+    final rows = await _db.query(_n, orderBy: 'updated_at DESC, id DESC');
+    return rows.map(Note.fromMap).toList();
+  }
+
+  @override
+  Future<Note> insertNote(Note note) async {
+    final id = await _db.insert(_n, note.toMap()..remove('id'));
+    return note.copyWith(id: id);
+  }
+
+  @override
+  Future<void> updateNote(Note note) async {
+    final changed = await _db.update(_n, note.toMap()..remove('id'),
+        where: 'id = ?', whereArgs: [note.id]);
+    if (changed == 0) throw StateError('Note ${note.id} no longer exists.');
+  }
+
+  @override
+  Future<void> deleteNote(int id) async {
+    await _db.delete(_n, where: 'id = ?', whereArgs: [id]);
+  }
+
   // ------------------------------------------------------------------ settings
 
   @override
@@ -145,6 +173,7 @@ class SqliteFinanceRepository implements FinanceRepository {
       await txn.delete(_t);
       await txn.delete(_c);
       await txn.delete(_s);
+      await txn.delete(_n);
       final batch = txn.batch();
       for (final c in data.categories) {
         batch.insert(_c, c.toMap());
@@ -158,6 +187,9 @@ class SqliteFinanceRepository implements FinanceRepository {
       data.settings.forEach((k, v) {
         batch.insert(_s, {'key': k, 'value': v});
       });
+      for (final n in data.notes) {
+        batch.insert(_n, n.toMap());
+      }
       await batch.commit(noResult: true);
     });
   }
@@ -169,6 +201,7 @@ class SqliteFinanceRepository implements FinanceRepository {
       await txn.delete(_t);
       await txn.delete(_c);
       await txn.delete(_s);
+      await txn.delete(_n);
       await AppDatabase.seedDefaultCategories(txn);
     });
   }

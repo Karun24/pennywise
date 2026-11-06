@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/budget_service.dart';
 import '../../services/demo_data.dart';
+import '../../services/reminder_service.dart';
 import '../../state/finance_store.dart';
 import '../../state/shell_controller.dart';
 import '../../theme/theme_ext.dart';
@@ -15,8 +16,11 @@ import '../../widgets/common.dart';
 import '../../widgets/dialogs.dart';
 import '../../widgets/insight_card.dart';
 import '../../widgets/transaction_tile.dart';
+import '../../widgets/update_widgets.dart';
 import '../add_transaction/add_transaction_screen.dart';
 import '../history/history_screen.dart';
+import '../notes/note_editor_screen.dart';
+import '../notes/notes_screen.dart';
 
 /// The dashboard: balance, this month, insights, charts, budgets, recent.
 class HomeScreen extends StatelessWidget {
@@ -33,8 +37,10 @@ class HomeScreen extends StatelessWidget {
           children: [
             const _Header(),
             const SizedBox(height: 18),
+            const UpdateBanner(),
             const _BalanceCard(),
             const SizedBox(height: 16),
+            const _NextReminderCard(),
             if (!store.hasTransactions)
               const _WelcomeCard()
             else ...const [
@@ -93,6 +99,17 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        IconButton.filledTonal(
+          tooltip: 'Notes & reminders',
+          onPressed: () => NotesScreen.open(context),
+          icon: Badge(
+            isLabelVisible: store.upcomingReminders.isNotEmpty,
+            label: Text('${store.upcomingReminders.length}'),
+            backgroundColor: context.penny.accent,
+            child: const Icon(Icons.sticky_note_2_rounded),
+          ),
+        ),
+        const SizedBox(width: 4),
         IconButton.filledTonal(
           tooltip: 'All transactions',
           onPressed: () => HistoryScreen.open(context),
@@ -755,6 +772,61 @@ class _RecentCard extends StatelessWidget {
               onTap: () => AddTransactionScreen.open(context, existing: t),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Shows the next upcoming note reminder, if there is one.
+class _NextReminderCard extends StatelessWidget {
+  const _NextReminderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<FinanceStore>();
+    final upcoming = store.upcomingReminders;
+    if (upcoming.isEmpty) return const SizedBox.shrink();
+    final next = upcoming.first;
+    final accent = context.penny.accent;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: PennyCard(
+        onTap: () => NoteEditorScreen.open(context, existing: next),
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(Icons.alarm_rounded, color: accent),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(next.displayTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${reminderLabel(next.reminderAt!, store.now)}'
+                    '${upcoming.length > 1 ? ' · +${upcoming.length - 1} more' : ''}',
+                    style: context.text.bodySmall?.copyWith(color: accent),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => NotesScreen.open(context),
+              child: const Text('All notes'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -13,12 +13,13 @@ class AppDatabase {
   static const fileName = 'pennywise.db';
 
   /// Bump this and add a step in [_onUpgrade] whenever the schema changes.
-  static const schemaVersion = 1;
+  static const schemaVersion = 2;
 
   static const tCategories = 'categories';
   static const tTransactions = 'transactions';
   static const tBudgets = 'category_budgets';
   static const tSettings = 'settings';
+  static const tNotes = 'notes';
 
   static Future<Database> open({String? overridePath}) async {
     final path = overridePath ?? p.join(await getDatabasesPath(), fileName);
@@ -80,12 +81,28 @@ class AppDatabase {
         value TEXT NOT NULL
       )
     ''');
+    await _createNotes(db);
+  }
+
+  /// Added in schema version 2.
+  static Future<void> _createNotes(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tNotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL DEFAULT '',
+        pinned INTEGER NOT NULL DEFAULT 0,
+        reminder_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
   }
 
   static Future<void> _onUpgrade(
       Database db, int oldVersion, int newVersion) async {
-    // Example for the future:
-    // if (oldVersion < 2) { await db.execute('ALTER TABLE ...'); }
+    // Each step upgrades existing users' data without losing anything.
+    if (oldVersion < 2) await _createNotes(db);
   }
 
   static Future<void> seedDefaultCategories(DatabaseExecutor db) async {

@@ -4,6 +4,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Permanent signing key. On GitHub the workflow writes the key from the
+// DEBUG_KEYSTORE_BASE64 secret and sets PENNYWISE_KEYSTORE_PATH. Using an
+// explicit path (instead of relying on ~/.android/debug.keystore) guarantees
+// every build has the same signature, so updates install over the old app.
+val pennywiseKeystore: String? = System.getenv("PENNYWISE_KEYSTORE_PATH")
+
 android {
     namespace = "com.pennywise.pennywise"
     compileSdk = flutter.compileSdkVersion
@@ -24,12 +30,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("pennywise") {
+            pennywiseKeystore?.let { path ->
+                storeFile = file(path)
+                storeType = "pkcs12"
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Signed with the debug key. On GitHub this is the permanent key
-            // from the DEBUG_KEYSTORE_BASE64 secret, so updates install over
-            // the previous version and keep the user's data.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (pennywiseKeystore != null) {
+                signingConfigs.getByName("pennywise")
+            } else {
+                // Local builds without the key fall back to the debug key.
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

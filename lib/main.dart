@@ -4,6 +4,7 @@ import 'app.dart';
 import 'database/app_database.dart';
 import 'repositories/finance_repository.dart';
 import 'repositories/sqlite_finance_repository.dart';
+import 'screens/add_transaction/add_transaction_screen.dart';
 import 'screens/notes/note_editor_screen.dart';
 import 'services/reminder_service.dart';
 import 'state/finance_store.dart';
@@ -25,25 +26,33 @@ Future<void> main() async {
   final reminders = LocalReminderScheduler();
   final store = FinanceStore(repository, reminders: reminders);
 
-  // Tapping a reminder notification opens that note.
-  void openNote(int id) {
-    final note = store.noteById(id);
+  // Tapping a notification opens the matching screen.
+  void handleTap(String payload) {
     final nav = navigatorKey.currentState;
-    if (note == null || nav == null) return;
+    if (nav == null) return;
+    if (payload == ReminderPayload.addTransaction) {
+      nav.push(MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => const AddTransactionScreen()));
+      return;
+    }
+    final id = ReminderPayload.noteId(payload);
+    final note = id == null ? null : store.noteById(id);
+    if (note == null) return;
     nav.push(MaterialPageRoute<void>(
         builder: (_) => NoteEditorScreen(existing: note)));
   }
 
-  await reminders.init(onOpenNote: openNote);
+  await reminders.init(onTap: handleTap);
   await store.load();
 
   final updates = UpdateController();
   runApp(PennyWiseApp(
       store: store, updates: updates, navigatorKey: navigatorKey));
 
-  final launchedNote = await reminders.launchedFromNote();
-  if (launchedNote != null) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => openNote(launchedNote));
+  final launched = await reminders.launchedPayload();
+  if (launched != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => handleTap(launched));
   }
   // Quietly look for a newer version (only for GitHub-built APKs).
   if (store.settings.autoUpdateCheck) updates.check(silent: true);

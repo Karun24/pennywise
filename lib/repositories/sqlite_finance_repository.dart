@@ -4,6 +4,7 @@ import '../database/app_database.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
+import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
 import 'finance_repository.dart';
 
@@ -18,6 +19,7 @@ class SqliteFinanceRepository implements FinanceRepository {
   static const _b = AppDatabase.tBudgets;
   static const _s = AppDatabase.tSettings;
   static const _n = AppDatabase.tNotes;
+  static const _r = AppDatabase.tRecurring;
 
   @override
   Future<void> init() async {
@@ -52,6 +54,8 @@ class SqliteFinanceRepository implements FinanceRepository {
   Future<void> deleteCategory(int id, {required int reassignTo}) async {
     await _db.transaction((txn) async {
       await txn.update(_t, {'category_id': reassignTo},
+          where: 'category_id = ?', whereArgs: [id]);
+      await txn.update(_r, {'category_id': reassignTo},
           where: 'category_id = ?', whereArgs: [id]);
       await txn.delete(_b, where: 'category_id = ?', whereArgs: [id]);
       await txn.delete(_c, where: 'id = ? AND is_default = 0', whereArgs: [id]);
@@ -142,6 +146,51 @@ class SqliteFinanceRepository implements FinanceRepository {
     await _db.delete(_n, where: 'id = ?', whereArgs: [id]);
   }
 
+  // ----------------------------------------------------------------- recurring
+
+  @override
+  Future<List<RecurringRule>> getRecurring() async {
+    final rows = await _db.query(_r, orderBy: 'next_due ASC, id ASC');
+    return rows.map(RecurringRule.fromMap).toList();
+  }
+
+  @override
+  Future<RecurringRule> insertRecurring(RecurringRule rule) async {
+    final id = await _db.insert(_r, rule.toMap()..remove('id'));
+    return rule.copyWith(id: id);
+  }
+
+  @override
+  Future<void> updateRecurring(RecurringRule rule) async {
+    await _db.update(_r, rule.toMap()..remove('id'),
+        where: 'id = ?', whereArgs: [rule.id]);
+  }
+
+  @override
+  Future<void> deleteRecurring(int id) async {
+    await _db.transaction((txn) async {
+      await txn.update(_t, {'recurring_id': null},
+          where: 'recurring_id = ?', whereArgs: [id]);
+      await txn.delete(_r, where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  @override
+  Future<void> applyRecurring(
+      List<TransactionEntry> created, List<RecurringRule> updated) async {
+    await _db.transaction((txn) async {
+      final batch = txn.batch();
+      for (final t in created) {
+        batch.insert(_t, t.toMap()..remove('id'));
+      }
+      for (final r in updated) {
+        batch.update(_r, {'next_due': r.nextDue.millisecondsSinceEpoch},
+            where: 'id = ?', whereArgs: [r.id]);
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
   // ------------------------------------------------------------------ settings
 
   @override
@@ -171,6 +220,7 @@ class SqliteFinanceRepository implements FinanceRepository {
     await _db.transaction((txn) async {
       await txn.delete(_b);
       await txn.delete(_t);
+      await txn.delete(_r);
       await txn.delete(_c);
       await txn.delete(_s);
       await txn.delete(_n);
@@ -190,6 +240,9 @@ class SqliteFinanceRepository implements FinanceRepository {
       for (final n in data.notes) {
         batch.insert(_n, n.toMap());
       }
+      for (final r in data.recurring) {
+        batch.insert(_r, r.toMap());
+      }
       await batch.commit(noResult: true);
     });
   }
@@ -199,6 +252,7 @@ class SqliteFinanceRepository implements FinanceRepository {
     await _db.transaction((txn) async {
       await txn.delete(_b);
       await txn.delete(_t);
+      await txn.delete(_r);
       await txn.delete(_c);
       await txn.delete(_s);
       await txn.delete(_n);

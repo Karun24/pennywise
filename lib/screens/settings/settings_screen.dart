@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_settings.dart';
+import '../../services/app_lock_service.dart';
 import '../../services/backup_file_service.dart';
 import '../../services/backup_service.dart';
 import '../../services/demo_data.dart';
@@ -16,6 +17,7 @@ import '../../widgets/dialogs.dart';
 import '../../widgets/segmented.dart';
 import '../../widgets/update_widgets.dart';
 import '../notes/notes_screen.dart';
+import '../recurring/recurring_screen.dart';
 import 'manage_categories_screen.dart';
 
 /// Profile & settings: preferences, money, categories, data, privacy.
@@ -92,7 +94,16 @@ class SettingsScreen extends StatelessWidget {
                 value: '${store.notes.length}',
                 onTap: () => NotesScreen.open(context),
               ),
+              _Tile(
+                icon: Icons.repeat_rounded,
+                title: 'Recurring transactions',
+                value: '${store.recurring.length}',
+                onTap: () => RecurringScreen.open(context),
+              ),
             ]),
+            const SizedBox(height: 22),
+            const _GroupTitle('Reminders & security'),
+            const _ReminderAndLockGroup(),
             const SizedBox(height: 22),
             const _GroupTitle('Your data'),
             _SettingsGroup(children: [
@@ -642,6 +653,118 @@ class _UpdatesGroup extends StatelessWidget {
         value: settings.autoUpdateCheck,
         onChanged: (v) => SettingsScreen._save(
             context, settings.copyWith(autoUpdateCheck: v)),
+      ),
+    ]);
+  }
+}
+
+/// Daily reminder (on/off + time) and App lock.
+class _ReminderAndLockGroup extends StatelessWidget {
+  const _ReminderAndLockGroup();
+
+  Future<void> _toggleDaily(BuildContext context, bool on) async {
+    final store = context.read<FinanceStore>();
+    final messenger = ScaffoldMessenger.of(context);
+    if (on && !await store.reminders.requestPermission()) {
+      messenger.showSnackBar(pennySnack(
+        'Notifications are off for PennyWise. Turn them on in your phone '
+        'settings to get the daily reminder.',
+        error: true,
+      ));
+    }
+    if (!context.mounted) return;
+    await SettingsScreen._save(
+        context, store.settings.copyWith(dailyReminder: on));
+  }
+
+  Future<void> _pickTime(BuildContext context) async {
+    final store = context.read<FinanceStore>();
+    final m = store.settings.dailyReminderMinutes;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: m ~/ 60, minute: m % 60),
+      helpText: 'Daily reminder time',
+    );
+    if (picked == null || !context.mounted) return;
+    await SettingsScreen._save(context,
+        store.settings.copyWith(
+            dailyReminderMinutes: picked.hour * 60 + picked.minute));
+  }
+
+  Future<void> _toggleLock(BuildContext context, bool on) async {
+    final store = context.read<FinanceStore>();
+    final auth = context.read<AppLockAuthenticator>();
+    final messenger = ScaffoldMessenger.of(context);
+    if (on) {
+      if (!await auth.isAvailable()) {
+        messenger.showSnackBar(pennySnack(
+          'Set up a screen lock (fingerprint, face, PIN or pattern) in your '
+          'phone settings first.',
+          error: true,
+        ));
+        return;
+      }
+      final result = await auth.authenticate('Confirm to turn on App lock');
+      if (result != UnlockResult.success) {
+        messenger.showSnackBar(
+            pennySnack('App lock was not turned on.', error: true));
+        return;
+      }
+    }
+    if (!context.mounted) return;
+    await SettingsScreen._save(context, store.settings.copyWith(appLock: on));
+    messenger.showSnackBar(pennySnack(on
+        ? 'App lock is on. PennyWise will ask to unlock when opened.'
+        : 'App lock is off.'));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<FinanceStore>().settings;
+    final m = s.dailyReminderMinutes;
+    final time = DateUtilsX.time(DateTime(2000, 1, 1, m ~/ 60, m % 60));
+
+    Widget leading(IconData icon) => Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: context.colors.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 20, color: context.colors.primary),
+        );
+
+    return _SettingsGroup(children: [
+      SwitchListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+        secondary: leading(Icons.notifications_active_rounded),
+        title: Text('Daily reminder', style: context.text.titleSmall),
+        subtitle: Text(
+          s.dailyReminder
+              ? 'Every day at $time, unless you have already added '
+                  'something that day'
+              : 'Get a nudge to log your expenses',
+          style: context.text.bodySmall,
+        ),
+        value: s.dailyReminder,
+        onChanged: (v) => _toggleDaily(context, v),
+      ),
+      if (s.dailyReminder)
+        _Tile(
+          icon: Icons.schedule_rounded,
+          title: 'Reminder time',
+          value: time,
+          onTap: () => _pickTime(context),
+        ),
+      SwitchListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+        secondary: leading(Icons.fingerprint_rounded),
+        title: Text('App lock', style: context.text.titleSmall),
+        subtitle: Text(
+          'Use your fingerprint, face or phone PIN to open PennyWise',
+          style: context.text.bodySmall,
+        ),
+        value: s.appLock,
+        onChanged: (v) => _toggleLock(context, v),
       ),
     ]);
   }

@@ -12,6 +12,7 @@ import '../state/shell_controller.dart';
 import '../state/update_controller.dart';
 import '../theme/theme_ext.dart';
 import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 import 'penny_bottom_bar.dart';
 
 /// Root scaffold with the bottom navigation. Tabs keep their scroll state
@@ -60,7 +61,8 @@ class AppShell extends StatelessWidget {
       );
     }
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    return _ShellLifecycle(
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlay,
       child: PopScope(
         canPop: shell.tab == AppTab.home,
@@ -77,6 +79,54 @@ class AppShell extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
+  }
+}
+
+/// Adds due recurring transactions and refreshes the daily reminder when the
+/// app returns to the foreground, and shows one-time store notices.
+class _ShellLifecycle extends StatefulWidget {
+  const _ShellLifecycle({required this.child});
+  final Widget child;
+
+  @override
+  State<_ShellLifecycle> createState() => _ShellLifecycleState();
+}
+
+class _ShellLifecycleState extends State<_ShellLifecycle>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final store = context.read<FinanceStore>();
+      store.runRecurring();
+      store.refreshDailyReminder();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasNotice = context.select<FinanceStore, bool>((s) => s.hasNotice);
+    if (hasNotice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final notice = context.read<FinanceStore>().takeNotice();
+        if (notice != null) showSnack(context, notice);
+      });
+    }
+    return widget.child;
   }
 }

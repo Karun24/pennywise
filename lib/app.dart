@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'models/app_settings.dart';
+import 'services/app_lock_service.dart';
 import 'shell/app_shell.dart';
 import 'state/finance_store.dart';
 import 'state/shell_controller.dart';
 import 'state/update_controller.dart';
 import 'theme/app_theme.dart';
+import 'widgets/app_lock_gate.dart';
 
 class PennyWiseApp extends StatelessWidget {
   const PennyWiseApp({
@@ -14,7 +16,11 @@ class PennyWiseApp extends StatelessWidget {
     required this.store,
     this.updates,
     this.navigatorKey,
+    this.authenticator,
   });
+
+  /// Fingerprint / PIN check for App lock (a fake is injected in tests).
+  final AppLockAuthenticator? authenticator;
 
   /// Lets code outside the widget tree (e.g. a tapped notification) navigate.
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -42,6 +48,8 @@ class PennyWiseApp extends StatelessWidget {
         else
           ChangeNotifierProvider<UpdateController>(
               create: (_) => UpdateController(configured: false)),
+        Provider<AppLockAuthenticator>(
+            create: (_) => authenticator ?? DeviceAppLockAuthenticator()),
       ],
       child: Selector<FinanceStore, AppThemePreference>(
         selector: (_, s) => s.settings.theme,
@@ -58,7 +66,7 @@ class PennyWiseApp extends StatelessWidget {
             return MediaQuery(
               data: mq.copyWith(
                   textScaler: mq.textScaler.clamp(maxScaleFactor: 1.35)),
-              child: child ?? const SizedBox.shrink(),
+              child: AppLockGate(child: child ?? const SizedBox.shrink()),
             );
           },
           home: const AppShell(),

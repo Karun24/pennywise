@@ -203,7 +203,7 @@ void main() {
 
       // A version-1 backup has no "notes" section.
       final v1 = BackupService.encode(s.snapshot())
-          .replaceFirst('"version": 2', '"version": 1');
+          .replaceFirst('"version": 3', '"version": 1');
       final old = BackupService.decode(v1.replaceAll(
           RegExp(r',\s*"notes": \[[\s\S]*\]\s*}\s*$'), '\n}'));
       expect(old.notes, isEmpty);
@@ -215,8 +215,10 @@ class _FakeReminders implements ReminderScheduler {
   final scheduled = <int>[];
   final cancelled = <int>[];
 
+  final daily = <List<DateTime>>[];
+
   @override
-  Future<void> init({void Function(int noteId)? onOpenNote}) async {}
+  Future<void> init({void Function(String payload)? onTap}) async {}
 
   @override
   Future<bool> requestPermission() async => true;
@@ -231,5 +233,8 @@ class _FakeReminders implements ReminderScheduler {
   Future<void> cancel(int noteId) async => cancelled.add(noteId);
 
   @override
-  Future<int?> launchedFromNote() async => null;
+  Future<void> scheduleDaily(List<DateTime> times) async => daily.add(times);
+
+  @override
+  Future<String?> launchedPayload() async => null;
 }

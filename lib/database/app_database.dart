@@ -13,13 +13,14 @@ class AppDatabase {
   static const fileName = 'pennywise.db';
 
   /// Bump this and add a step in [_onUpgrade] whenever the schema changes.
-  static const schemaVersion = 2;
+  static const schemaVersion = 3;
 
   static const tCategories = 'categories';
   static const tTransactions = 'transactions';
   static const tBudgets = 'category_budgets';
   static const tSettings = 'settings';
   static const tNotes = 'notes';
+  static const tRecurring = 'recurring';
 
   static Future<Database> open({String? overridePath}) async {
     final path = overridePath ?? p.join(await getDatabasesPath(), fileName);
@@ -61,7 +62,8 @@ class AppDatabase {
         payment_method TEXT NOT NULL DEFAULT 'other',
         occurred_at INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        recurring_id INTEGER
       )
     ''');
     await db.execute(
@@ -82,6 +84,27 @@ class AppDatabase {
       )
     ''');
     await _createNotes(db);
+    await _createRecurring(db);
+  }
+
+  /// Added in schema version 3.
+  static Future<void> _createRecurring(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tRecurring (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL CHECK (type IN ('expense', 'income')),
+        amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+        category_id INTEGER NOT NULL
+          REFERENCES $tCategories(id) ON DELETE RESTRICT,
+        note TEXT NOT NULL DEFAULT '',
+        payment_method TEXT NOT NULL DEFAULT 'other',
+        frequency TEXT NOT NULL,
+        anchor_day INTEGER NOT NULL,
+        next_due INTEGER NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      )
+    ''');
   }
 
   /// Added in schema version 2.
@@ -103,6 +126,11 @@ class AppDatabase {
       Database db, int oldVersion, int newVersion) async {
     // Each step upgrades existing users' data without losing anything.
     if (oldVersion < 2) await _createNotes(db);
+    if (oldVersion < 3) {
+      await db.execute(
+          'ALTER TABLE $tTransactions ADD COLUMN recurring_id INTEGER');
+      await _createRecurring(db);
+    }
   }
 
   static Future<void> seedDefaultCategories(DatabaseExecutor db) async {

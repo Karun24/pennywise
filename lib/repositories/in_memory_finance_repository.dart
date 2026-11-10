@@ -2,6 +2,7 @@ import '../database/default_categories.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
+import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
 import 'finance_repository.dart';
 
@@ -12,6 +13,8 @@ class InMemoryFinanceRepository implements FinanceRepository {
   final Map<int, CategoryBudget> _budgets = {};
   final Map<String, String> _settings = {};
   final List<Note> _notes = [];
+  final List<RecurringRule> _recurring = [];
+  int _nextRecurringId = 1;
   int _nextCategoryId = 1;
   int _nextTransactionId = 1;
   int _nextNoteId = 1;
@@ -58,6 +61,11 @@ class InMemoryFinanceRepository implements FinanceRepository {
     for (var i = 0; i < _transactions.length; i++) {
       if (_transactions[i].categoryId == id) {
         _transactions[i] = _transactions[i].copyWith(categoryId: reassignTo);
+      }
+    }
+    for (var i = 0; i < _recurring.length; i++) {
+      if (_recurring[i].categoryId == id) {
+        _recurring[i] = _recurring[i].copyWith(categoryId: reassignTo);
       }
     }
     _budgets.remove(id);
@@ -137,6 +145,56 @@ class InMemoryFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Future<List<RecurringRule>> getRecurring() async =>
+      List<RecurringRule>.of(_recurring)
+        ..sort((a, b) => a.nextDue.compareTo(b.nextDue));
+
+  @override
+  Future<RecurringRule> insertRecurring(RecurringRule rule) async {
+    final stored = rule.copyWith(id: _nextRecurringId++);
+    _recurring.add(stored);
+    return stored;
+  }
+
+  @override
+  Future<void> updateRecurring(RecurringRule rule) async {
+    final i = _recurring.indexWhere((r) => r.id == rule.id);
+    if (i >= 0) _recurring[i] = rule;
+  }
+
+  @override
+  Future<void> deleteRecurring(int id) async {
+    _recurring.removeWhere((r) => r.id == id);
+    for (var i = 0; i < _transactions.length; i++) {
+      final t = _transactions[i];
+      if (t.recurringId == id) {
+        _transactions[i] = TransactionEntry(
+          id: t.id,
+          type: t.type,
+          amountMinor: t.amountMinor,
+          categoryId: t.categoryId,
+          note: t.note,
+          date: t.date,
+          paymentMethod: t.paymentMethod,
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        );
+      }
+    }
+  }
+
+  @override
+  Future<void> applyRecurring(
+      List<TransactionEntry> created, List<RecurringRule> updated) async {
+    for (final t in created) {
+      await insertTransaction(t);
+    }
+    for (final r in updated) {
+      await updateRecurring(r);
+    }
+  }
+
+  @override
   Future<Map<String, String>> getSettings() async => Map.of(_settings);
 
   @override
@@ -161,11 +219,15 @@ class InMemoryFinanceRepository implements FinanceRepository {
     _notes
       ..clear()
       ..addAll(data.notes);
+    _recurring
+      ..clear()
+      ..addAll(data.recurring);
     int maxId(Iterable<int?> ids) =>
         ids.fold<int>(0, (m, id) => (id ?? 0) > m ? id! : m);
     _nextCategoryId = maxId(_categories.map((c) => c.id)) + 1;
     _nextTransactionId = maxId(_transactions.map((t) => t.id)) + 1;
     _nextNoteId = maxId(_notes.map((n) => n.id)) + 1;
+    _nextRecurringId = maxId(_recurring.map((r) => r.id)) + 1;
   }
 
   @override
@@ -175,6 +237,8 @@ class InMemoryFinanceRepository implements FinanceRepository {
     _budgets.clear();
     _settings.clear();
     _notes.clear();
+    _recurring.clear();
+    _nextRecurringId = 1;
     _nextCategoryId = 1;
     _nextTransactionId = 1;
     _nextNoteId = 1;

@@ -20,6 +20,9 @@ A private, offline, "smart" personal expense tracker for Android and iOS, built 
 | Budgets | Monthly budget ring with % used, remaining, safe daily spend and month-end projection; per-category budgets; warnings at 75 % and 90 %, alert when exceeded, instant alert after saving an expense that crosses a threshold |
 | Insights | Month-to-date vs same period last month, week-over-week category increases, top category, average daily spend, savings rate, budget pace, unusual transactions (≥3× median and > mean + 2σ), many small discretionary purchases, no-spend days. Every number comes from your data; with no data there are no insights |
 | Notes & reminders | Free-form notes (title + text), pin to top, search, filter by reminders. Add a reminder with presets (in 30 min, in 1 hour, today 8 PM, tomorrow 9 AM, next week) or any date & time; the phone shows a notification at that time even when the app is closed, and tapping it opens the note. Reminders survive restarts and are included in backups |
+| Recurring | Set any transaction to repeat daily, weekly, monthly or yearly (rent, salary, Netflix, EMIs). Due ones are added automatically when the app opens, including any missed while it was closed; monthly rules keep their day (31st → 28 Feb → 31 Mar). Pause, edit or stop them in Profile → Recurring transactions |
+| Daily reminder | Optional notification at a time you choose (default 9 PM), skipped automatically on days you have already logged something. Tapping it opens Add transaction |
+| App lock | Fingerprint, face or phone PIN/pattern to open the app (checked by the phone; PennyWise never sees it). Locks at start-up and after 30 s in the background |
 | Settings | Theme (System / Light / Dark), currency (INR default + 8 others, display only), monthly budget, starting balance, manage categories, export JSON backup, export CSV, import backup (validated before anything is replaced), demo data, clear all data (double confirmation) |
 
 ## Architecture
@@ -52,7 +55,7 @@ Key decisions:
 - **Optional AI later** – the smart layer is three pure classes (`Categorizer`, `TransactionParser`, `InsightsEngine`). A future AI-backed implementation can sit beside them behind `FinanceStore` and fall back to the local rules when offline or not configured.
 - **Schema versioning** – `AppDatabase.schemaVersion` + `_onUpgrade` for safe migrations; backups carry a `format` and `version` and are fully validated before restore.
 
-Dependencies (all free, open source): `provider`, `sqflite`, `path`, `path_provider`, `intl`, `share_plus`, `file_picker`, `url_launcher`, `flutter_local_notifications`, `timezone`. Font: Inter (SIL Open Font License, bundled).
+Dependencies (all free, open source): `provider`, `sqflite`, `path`, `path_provider`, `intl`, `share_plus`, `file_picker`, `url_launcher`, `flutter_local_notifications`, `timezone`, `local_auth`. Font: Inter (SIL Open Font License, bundled).
 
 ## Requirements
 

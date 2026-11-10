@@ -5,9 +5,11 @@ import '../models/app_settings.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
+import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
 import '../repositories/finance_repository.dart';
 import '../services/budget_service.dart';
+import '../services/recurring_service.dart';
 import '../services/reminder_service.dart';
 import '../services/smart/categorizer.dart';
 import '../services/smart/insights_engine.dart';
@@ -43,6 +45,8 @@ class FinanceStore extends ChangeNotifier {
   List<TransactionEntry> _transactions = const [];
   List<CategoryBudget> _budgets = const [];
   List<Note> _notes = const [];
+  List<RecurringRule> _recurring = const [];
+  String? _notice;
   AppSettings _settings = const AppSettings();
   Map<int, Category> _categoryIndex = const {};
 
@@ -77,6 +81,25 @@ class FinanceStore extends ChangeNotifier {
     return null;
   }
   AppSettings get settings => _settings;
+
+  /// Recurring rules, next due first.
+  List<RecurringRule> get recurring => _recurring;
+
+  RecurringRule? recurringById(int id) {
+    for (final r in _recurring) {
+      if (r.id == id) return r;
+    }
+    return null;
+  }
+
+  /// A one-time message for the UI (e.g. "2 recurring transactions added").
+  String? takeNotice() {
+    final n = _notice;
+    _notice = null;
+    return n;
+  }
+
+  bool get hasNotice => _notice != null;
   CurrencyInfo get currency => CurrencyInfo.byCode(_settings.currencyCode);
   DateTime get now => _clock();
   bool get hasTransactions => _transactions.isNotEmpty;
@@ -96,6 +119,8 @@ class FinanceStore extends ChangeNotifier {
       await _repo.init();
       await _reloadAll();
       _loadError = null;
+      await runRecurring();
+      await refreshDailyReminder();
     } catch (e, st) {
       debugPrint('PennyWise load failed: $e\n$st');
       _loadError = 'Could not open your data. $e';
@@ -112,6 +137,7 @@ class FinanceStore extends ChangeNotifier {
       _repo.getBudgets(),
       _repo.getSettings(),
       _repo.getNotes(),
+      _repo.getRecurring(),
     ]);
     _categories = results[0] as List<Category>;
     _transactions = results[1] as List<TransactionEntry>;
@@ -122,6 +148,7 @@ class FinanceStore extends ChangeNotifier {
         if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
         return b.updatedAt.compareTo(a.updatedAt);
       });
+    _recurring = results[5] as List<RecurringRule>;
     _categoryIndex = {for (final c in _categories) c.id!: c};
     _version++;
     _categorizer = null;
@@ -151,6 +178,7 @@ class FinanceStore extends ChangeNotifier {
           entry.copyWith(createdAt: stamp, updatedAt: stamp));
       await _reloadAll();
       notifyListeners();
+      await refreshDailyReminder();
       if (!entry.isExpense) return const <BudgetStatus>[];
       return BudgetService.newlyCrossed(before: before, after: budgetOverview());
     });
@@ -357,12 +385,115 @@ class FinanceStore extends ChangeNotifier {
       try {
         await _repo.saveSettings(next.toKeyValues());
         _version++;
+        if (next.dailyReminder != previous.dailyReminder ||
+            next.dailyReminderMinutes != previous.dailyReminderMinutes) {
+          await refreshDailyReminder();
+        }
       } catch (_) {
         _settings = previous;
         notifyListeners();
         rethrow;
       }
     });
+  }
+
+  // ---------------------------------------------------------------- recurring
+
+  /// Adds every recurring transaction that has become due. Safe to call any
+  /// time (app start, app resume). Returns how many were added.
+  Future<int> runRecurring() async {
+    final run = RecurringService.due(_recurring, now);
+    if (run.isEmpty) return 0;
+    try {
+      await _repo.applyRecurring(run.created, run.updated);
+      await _reloadAll();
+      final n = run.created.length;
+      _notice = n == 1
+          ? '1 recurring transaction was added automatically.'
+          : '$n recurring transactions were added automatically.';
+      notifyListeners();
+      return n;
+    } catch (e, st) {
+      debugPrint('PennyWise recurring failed: $e\n$st');
+      return 0;
+    }
+  }
+
+  /// Creates a recurring rule starting on [entry]'s date and adds the first
+  /// transaction immediately if that date is today or earlier.
+  Future<RecurringRule> addRecurring(
+      TransactionEntry entry, RepeatFrequency frequency) {
+    return _guard('set up the recurring transaction', () async {
+      _validate(entry);
+      final start = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      final rule = await _repo.insertRecurring(RecurringRule(
+        type: entry.type,
+        amountMinor: entry.amountMinor,
+        categoryId: entry.categoryId,
+        note: entry.note,
+        paymentMethod: entry.paymentMethod,
+        frequency: frequency,
+        anchorDay: start.day,
+        nextDue: start,
+        createdAt: now,
+      ));
+      await _reloadAll();
+      final run = RecurringService.due(_recurring, now);
+      if (!run.isEmpty) {
+        await _repo.applyRecurring(run.created, run.updated);
+        await _reloadAll();
+      }
+      notifyListeners();
+      await refreshDailyReminder();
+      return recurringById(rule.id!) ?? rule;
+    });
+  }
+
+  Future<void> updateRecurring(RecurringRule rule) {
+    return _guard('update the recurring transaction', () async {
+      if (rule.amountMinor <= 0 || rule.amountMinor > Money.maxMinor) {
+        throw const StoreException('Enter an amount greater than zero.');
+      }
+      if (rule.note.length > 200) {
+        throw const StoreException('Description is too long.');
+      }
+      await _repo.updateRecurring(rule);
+      await _reloadAll();
+      notifyListeners();
+      if (rule.active) await runRecurring();
+    });
+  }
+
+  Future<void> deleteRecurring(RecurringRule rule) {
+    return _guard('delete the recurring transaction', () async {
+      await _repo.deleteRecurring(rule.id!);
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  // ----------------------------------------------------------- daily reminder
+
+  bool get loggedToday {
+    final t = now;
+    return _transactions.any((x) =>
+        x.date.year == t.year && x.date.month == t.month && x.date.day == t.day);
+  }
+
+  /// Re-plans the daily "log your expenses" notifications. Today's is skipped
+  /// once something has been logged for today.
+  Future<void> refreshDailyReminder() async {
+    try {
+      await _reminders.scheduleDaily(_settings.dailyReminder
+          ? RecurringService.dailyReminderTimes(
+              now: now,
+              minutesOfDay: _settings.dailyReminderMinutes,
+              loggedToday: loggedToday,
+            )
+          : const []);
+    } catch (e) {
+      debugPrint('PennyWise daily reminder failed: $e');
+    }
   }
 
   // ------------------------------------------------------------ smart helpers
@@ -397,6 +528,7 @@ class FinanceStore extends ChangeNotifier {
         budgets: _budgets,
         settings: _settings.toKeyValues(),
         notes: _notes,
+        recurring: _recurring,
         exportedAt: now,
       );
 
@@ -428,6 +560,8 @@ class FinanceStore extends ChangeNotifier {
     for (final n in _notes) {
       await _reminders.schedule(n);
     }
+    await runRecurring();
+    await refreshDailyReminder();
   }
 
   Future<void> insertMany(List<TransactionEntry> entries) {

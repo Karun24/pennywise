@@ -40,6 +40,7 @@ class TransactionEntry {
     required this.paymentMethod,
     required this.createdAt,
     required this.updatedAt,
+    this.recurringId,
   });
 
   /// Null until the transaction has been stored.
@@ -54,6 +55,11 @@ class TransactionEntry {
   final PaymentMethod paymentMethod;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Set when the transaction was added automatically by a recurring rule.
+  final int? recurringId;
+
+  bool get isRecurring => recurringId != null;
 
   bool get isExpense => type == TransactionType.expense;
   bool get isIncome => type == TransactionType.income;
@@ -71,6 +77,7 @@ class TransactionEntry {
     PaymentMethod? paymentMethod,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? recurringId,
   }) {
     return TransactionEntry(
       id: id ?? this.id,
@@ -82,6 +89,7 @@ class TransactionEntry {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      recurringId: recurringId ?? this.recurringId,
     );
   }
 
@@ -95,6 +103,7 @@ class TransactionEntry {
         'payment_method': paymentMethod.name,
         'created_at': createdAt.millisecondsSinceEpoch,
         'updated_at': updatedAt.millisecondsSinceEpoch,
+        if (recurringId != null) 'recurring_id': recurringId,
       };
 
   factory TransactionEntry.fromMap(Map<String, Object?> map) {
@@ -111,6 +120,7 @@ class TransactionEntry {
           (map['created_at'] as num?)?.toInt() ?? 0),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(
           (map['updated_at'] as num?)?.toInt() ?? 0),
+      recurringId: (map['recurring_id'] as num?)?.toInt(),
     );
   }
 

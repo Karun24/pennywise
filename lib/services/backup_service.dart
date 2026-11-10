@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
+import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
 import '../utils/money.dart';
 
@@ -19,8 +20,9 @@ class BackupService {
   BackupService._();
 
   static const formatId = 'pennywise-backup';
-  /// 1 = transactions/categories/budgets/settings, 2 = + notes.
-  static const formatVersion = 2;
+  /// 1 = transactions/categories/budgets/settings, 2 = + notes,
+  /// 3 = + recurring rules.
+  static const formatVersion = 3;
 
   static String encode(BackupData data) {
     final json = {
@@ -32,6 +34,7 @@ class BackupService {
       'budgets': data.budgets.map((b) => b.toMap()).toList(),
       'settings': data.settings,
       'notes': data.notes.map((n) => n.toMap()).toList(),
+      'recurring': data.recurring.map((r) => r.toMap()).toList(),
     };
     return const JsonEncoder.withIndent('  ').convert(json);
   }
@@ -93,6 +96,20 @@ class BackupService {
         }
       }
 
+      final recurring = map['recurring'] == null
+          ? <RecurringRule>[]
+          : list('recurring').map(RecurringRule.fromMap).toList();
+      final categoryKinds = {for (final c in categories) c.id: c.kind};
+      final ruleIds = <int>{};
+      for (final r in recurring) {
+        if (r.id == null ||
+            !ruleIds.add(r.id!) ||
+            r.amountMinor <= 0 ||
+            categoryKinds[r.categoryId] != r.type) {
+          throw const BackupFormatException('A recurring rule is invalid.');
+        }
+      }
+
       _validate(categories, transactions, budgets);
       return BackupData(
         categories: categories,
@@ -100,6 +117,7 @@ class BackupService {
         budgets: budgets,
         settings: settings,
         notes: notes,
+        recurring: recurring,
         exportedAt: DateTime.tryParse('${map['exportedAt']}'),
       );
     } on BackupFormatException {

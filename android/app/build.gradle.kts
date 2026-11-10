@@ -45,6 +45,8 @@ dependencies {
     // Recommended alongside desugaring to avoid crashes on Android 12L+.
     implementation("androidx.window:window:1.0.0")
     implementation("androidx.window:window-java:1.0.0")
+    // AppCompat themes for the App lock fingerprint dialog.
+    implementation("androidx.appcompat:appcompat:1.7.0")
 }
 
 flutter {

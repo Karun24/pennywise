@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/category.dart';
+import '../../models/recurring_rule.dart';
 import '../../models/transaction_entry.dart';
 import '../../services/budget_service.dart';
 import '../../services/smart/transaction_parser.dart';
@@ -26,20 +27,24 @@ class _ScreenResult {
 
 /// Add or edit an income/expense.
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key, this.existing});
+  const AddTransactionScreen({super.key, this.existing, this.initialRepeat});
 
   final TransactionEntry? existing;
+
+  /// Pre-selects a repeat frequency (used by "New recurring").
+  final RepeatFrequency? initialRepeat;
 
   /// Opens the screen and shows the outcome (and any budget alert) as a
   /// snack bar on the calling screen.
   static Future<void> open(BuildContext context,
-      {TransactionEntry? existing}) async {
+      {TransactionEntry? existing, RepeatFrequency? initialRepeat}) async {
     final messenger = ScaffoldMessenger.of(context);
     final store = context.read<FinanceStore>();
     final result = await Navigator.of(context).push<_ScreenResult>(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => AddTransactionScreen(existing: existing),
+        builder: (_) => AddTransactionScreen(
+            existing: existing, initialRepeat: initialRepeat),
       ),
     );
     if (result == null) return;
@@ -76,6 +81,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String? _autoReason;
   late DateTime _date;
   PaymentMethod _payment = PaymentMethod.upi;
+
+  /// Null = does not repeat.
+  late RepeatFrequency? _repeat = widget.initialRepeat;
   String? _amountError;
   bool _saving = false;
 
@@ -230,8 +238,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       paymentMethod: _payment,
       createdAt: widget.existing?.createdAt ?? now,
       updatedAt: now,
+      recurringId: widget.existing?.recurringId,
     );
     try {
+      final repeat = _repeat;
+      if (!_editing && repeat != null) {
+        final rule = await store.addRecurring(entry, repeat);
+        final started = !rule.nextDue.isAtSameMomentAs(
+            DateTime(_date.year, _date.month, _date.day));
+        navigator.pop(_ScreenResult(
+          '${repeat.label} ${_type.label.toLowerCase()} of '
+          '${store.format(minor)} set up. '
+          '${started ? 'First one added; next' : 'First one'} on '
+          '${DateUtilsX.dayMonthYear(rule.nextDue)}.',
+        ));
+        return;
+      }
       if (_editing) {
         await store.updateTransaction(entry);
         navigator.pop(const _ScreenResult('Transaction updated'));
@@ -474,6 +496,41 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           ),
                       ],
                     ),
+                    if (!_editing) ...[
+                      const SizedBox(height: 18),
+                      _Label('Repeat'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Never'),
+                            selected: _repeat == null,
+                            onSelected: (_) => setState(() => _repeat = null),
+                          ),
+                          for (final f in RepeatFrequency.values)
+                            ChoiceChip(
+                              avatar: _repeat == f
+                                  ? const Icon(Icons.repeat_rounded, size: 16)
+                                  : null,
+                              label: Text(f.label),
+                              selected: _repeat == f,
+                              onSelected: (_) => setState(() => _repeat = f),
+                            ),
+                        ],
+                      ),
+                      if (_repeat != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, left: 2),
+                          child: Text(
+                            'PennyWise will add this automatically '
+                            '${_repeatHint(_repeat!, _date)}, starting '
+                            '${DateUtilsX.dayMonthYear(_date)}. Manage it in '
+                            'Profile > Recurring transactions.',
+                            style: context.text.bodySmall,
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -493,7 +550,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           )
                         : Text(_editing
                             ? 'Save changes'
-                            : 'Save ${_type.label.toLowerCase()}'),
+                            : _repeat != null
+                                ? 'Save ${_repeat!.label.toLowerCase()} '
+                                    '${_type.label.toLowerCase()}'
+                                : 'Save ${_type.label.toLowerCase()}'),
                   ),
                 ),
               ),
@@ -503,6 +563,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ),
     );
   }
+}
+
+String _repeatHint(RepeatFrequency f, DateTime start) {
+  final rule = RecurringRule(
+    type: TransactionType.expense,
+    amountMinor: 1,
+    categoryId: 0,
+    note: '',
+    paymentMethod: PaymentMethod.other,
+    frequency: f,
+    anchorDay: start.day,
+    nextDue: start,
+    createdAt: start,
+  );
+  final d = rule.describe();
+  return d[0].toLowerCase() + d.substring(1);
 }
 
 class _Label extends StatelessWidget {

@@ -32,6 +32,7 @@ class TransactionTile extends StatelessWidget {
     final subtitle = [
       if (entry.note.isNotEmpty) category?.name ?? 'Uncategorised',
       if (showDate && dateText != null) dateText!,
+      if (entry.isRecurring) 'Recurring',
       entry.paymentMethod.label,
     ].join(' · ');
     final amountColor =

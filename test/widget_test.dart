@@ -170,4 +170,29 @@ void main() {
     expect(find.text('Lent money to Ravi'), findsOneWidget);
     await _flushSnackBars(tester);
   });
+
+  testWidgets('add screen offers Repeat; settings shows reminder & lock',
+      (tester) async {
+    _phoneSize(tester);
+    final store = await _store();
+    await tester.pumpWidget(PennyWiseApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(_nav('Profile'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('App lock'), 200,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('Daily reminder'), findsOneWidget);
+    expect(find.text('App lock'), findsOneWidget);
+
+    await tester.tap(find.descendant(
+        of: find.byType(PennyBottomBar),
+        matching: find.byIcon(Icons.add_rounded)));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Monthly'), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Monthly'));
+    await tester.pumpAndSettle();
+    expect(find.text('Save monthly expense'), findsOneWidget);
+  });
 }

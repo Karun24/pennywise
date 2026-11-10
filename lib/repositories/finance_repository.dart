@@ -1,6 +1,7 @@
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
+import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
 
 /// Storage abstraction used by the app's state layer.
@@ -34,6 +35,18 @@ abstract class FinanceRepository {
   Future<Note> insertNote(Note note);
   Future<void> updateNote(Note note);
   Future<void> deleteNote(int id);
+
+  Future<List<RecurringRule>> getRecurring();
+  Future<RecurringRule> insertRecurring(RecurringRule rule);
+  Future<void> updateRecurring(RecurringRule rule);
+
+  /// Deletes a rule. Transactions it already added are kept.
+  Future<void> deleteRecurring(int id);
+
+  /// Atomically inserts due transactions and moves their rules forward,
+  /// so a crash can never add the same occurrence twice.
+  Future<void> applyRecurring(
+      List<TransactionEntry> created, List<RecurringRule> updated);
 
   Future<Map<String, String>> getSettings();
   Future<void> saveSettings(Map<String, String> values);

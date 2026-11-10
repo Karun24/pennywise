@@ -1,7 +1,7 @@
 # Builds the PennyWise Android app (APK) on GitHub's free servers and
 # publishes it as a Release you can download straight to your phone.
 # Runs automatically every time you upload/change files, or manually from
-# the Actions tab ("Run workflow")..
+# the Actions tab ("Run workflow").
 name: Build PennyWise APK
 
 on:
@@ -67,8 +67,11 @@ jobs:
             echo "::error::Add the repository secret DEBUG_KEYSTORE_BASE64 (Settings > Secrets and variables > Actions)."
             exit 1
           fi
-          mkdir -p ~/.android
-          echo "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > ~/.android/debug.keystore
+          KS="$RUNNER_TEMP/pennywise.keystore"
+          echo "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "$KS"
+          # Fails here if the secret was pasted incorrectly.
+          keytool -list -keystore "$KS" -storepass android -alias androiddebugkey > /dev/null
+          echo "PENNYWISE_KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
 
       - name: Build APK
         run: >
@@ -77,6 +80,18 @@ jobs:
           --build-name=1.0.${{ github.run_number }}
           --dart-define=BUILD_NUMBER=${{ github.run_number }}
           --dart-define=UPDATE_REPO=${{ github.repository }}
+
+      # Refuse to publish an APK that would not install as an update.
+      - name: Check the APK is signed with the permanent key
+        env:
+          EXPECTED_SHA256: f49603bc36eaf8794ca2a20e3ec4aa429bdd76c50c8c5bf10b9e748d69c3c7c6
+        run: |
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | tee certs.txt
+          if ! grep -qi "SHA-256 digest: $EXPECTED_SHA256" certs.txt; then
+            echo "::error::The APK is not signed with the permanent PennyWise key."
+            exit 1
+          fi
 
       - name: Publish release
         env:

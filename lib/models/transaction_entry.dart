@@ -1,12 +1,20 @@
-/// Whether money went out (expense) or came in (income).
+/// Whether money went out (expense), came in (income), or moved between accounts (transfer).
 enum TransactionType {
   expense,
-  income;
+  income,
+  transfer;
 
-  static TransactionType fromName(String? value) =>
-      value == 'income' ? TransactionType.income : TransactionType.expense;
+  static TransactionType fromName(String? value) => switch (value) {
+        'income' => TransactionType.income,
+        'transfer' => TransactionType.transfer,
+        _ => TransactionType.expense,
+      };
 
-  String get label => this == expense ? 'Expense' : 'Income';
+  String get label => switch (this) {
+        TransactionType.expense => 'Expense',
+        TransactionType.income => 'Income',
+        TransactionType.transfer => 'Transfer',
+      };
 }
 
 /// How a transaction was paid. UPI first because it is the most common
@@ -28,7 +36,7 @@ enum PaymentMethod {
       .firstWhere((m) => m.name == value, orElse: () => PaymentMethod.other);
 }
 
-/// A single income or expense record.
+/// A single income, expense, or inter-account transfer record.
 class TransactionEntry {
   const TransactionEntry({
     this.id,
@@ -41,6 +49,9 @@ class TransactionEntry {
     required this.createdAt,
     required this.updatedAt,
     this.recurringId,
+    this.accountId,
+    this.toAccountId,
+    this.tag = '',
   });
 
   /// Null until the transaction has been stored.
@@ -59,13 +70,40 @@ class TransactionEntry {
   /// Set when the transaction was added automatically by a recurring rule.
   final int? recurringId;
 
+  /// Source account this transaction belongs to.
+  final int? accountId;
+
+  /// For transfers: destination account.
+  final int? toAccountId;
+
+  /// Optional event or trip tag (e.g. 'GoaTrip', 'Diwali').
+  final String tag;
+
   bool get isRecurring => recurringId != null;
 
   bool get isExpense => type == TransactionType.expense;
   bool get isIncome => type == TransactionType.income;
+  bool get isTransfer => type == TransactionType.transfer;
 
-  /// Positive for income, negative for expense.
-  int get signedMinor => isIncome ? amountMinor : -amountMinor;
+  /// Positive for income, negative for expense, zero for transfer.
+  int get signedMinor {
+    if (isTransfer) return 0;
+    return isIncome ? amountMinor : -amountMinor;
+  }
+
+  /// Extracts all unique tags from [tag] and any `#hashtags` in [note].
+  List<String> get tags {
+    final list = <String>[];
+    if (tag.trim().isNotEmpty) list.add(tag.trim().replaceAll('#', ''));
+    final matches = RegExp(r'#(\w+)').allMatches(note);
+    for (final m in matches) {
+      final t = m.group(1);
+      if (t != null && t.isNotEmpty && !list.contains(t)) {
+        list.add(t);
+      }
+    }
+    return list;
+  }
 
   TransactionEntry copyWith({
     int? id,
@@ -78,6 +116,9 @@ class TransactionEntry {
     DateTime? createdAt,
     DateTime? updatedAt,
     int? recurringId,
+    int? accountId,
+    int? toAccountId,
+    String? tag,
   }) {
     return TransactionEntry(
       id: id ?? this.id,
@@ -90,6 +131,9 @@ class TransactionEntry {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       recurringId: recurringId ?? this.recurringId,
+      accountId: accountId ?? this.accountId,
+      toAccountId: toAccountId ?? this.toAccountId,
+      tag: tag ?? this.tag,
     );
   }
 
@@ -104,6 +148,9 @@ class TransactionEntry {
         'created_at': createdAt.millisecondsSinceEpoch,
         'updated_at': updatedAt.millisecondsSinceEpoch,
         if (recurringId != null) 'recurring_id': recurringId,
+        if (accountId != null) 'account_id': accountId,
+        if (toAccountId != null) 'to_account_id': toAccountId,
+        if (tag.isNotEmpty) 'tag': tag,
       };
 
   factory TransactionEntry.fromMap(Map<String, Object?> map) {
@@ -121,6 +168,9 @@ class TransactionEntry {
       updatedAt: DateTime.fromMillisecondsSinceEpoch(
           (map['updated_at'] as num?)?.toInt() ?? 0),
       recurringId: (map['recurring_id'] as num?)?.toInt(),
+      accountId: (map['account_id'] as num?)?.toInt(),
+      toAccountId: (map['to_account_id'] as num?)?.toInt(),
+      tag: (map['tag'] as String?) ?? '',
     );
   }
 
@@ -130,6 +180,9 @@ class TransactionEntry {
     if (amountMinor <= 0) errors.add('Amount must be greater than zero.');
     if (amountMinor > 1000000000 * 100) errors.add('Amount is too large.');
     if (note.length > 200) errors.add('Description is too long.');
+    if (isTransfer && accountId != null && accountId == toAccountId) {
+      errors.add('Source and destination accounts cannot be the same.');
+    }
     final now = DateTime.now();
     if (date.isAfter(DateTime(now.year + 1, now.month, now.day))) {
       errors.add('Date is too far in the future.');

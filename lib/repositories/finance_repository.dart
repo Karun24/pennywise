@@ -1,3 +1,4 @@
+import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
@@ -12,6 +13,13 @@ import '../models/transaction_entry.dart';
 abstract class FinanceRepository {
   /// Prepares storage and seeds default categories on first run.
   Future<void> init();
+
+  Future<List<Account>> getAccounts();
+  Future<Account> insertAccount(Account account);
+  Future<void> updateAccount(Account account);
+
+  /// Deletes an account, moving its transactions to [reassignTo].
+  Future<void> deleteAccount(int id, {required int reassignTo});
 
   Future<List<Category>> getCategories();
   Future<Category> insertCategory(Category category);

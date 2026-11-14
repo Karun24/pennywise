@@ -57,6 +57,28 @@ void main() {
       expect(s.count, 3);
     });
 
+    test('transfers are excluded from expense and income summaries', () {
+      final transfer = TransactionEntry(
+        id: 99,
+        type: TransactionType.transfer,
+        amountMinor: 500000,
+        categoryId: _id(DefaultCategoryNames.food),
+        note: 'Transfer to savings',
+        date: DateTime(2026, 11, 5),
+        paymentMethod: PaymentMethod.other,
+        createdAt: now,
+        updatedAt: now,
+        accountId: 1,
+        toAccountId: 2,
+      );
+      final listWithTransfer = [...txs, transfer];
+      final s =
+          AnalyticsService.summarize(listWithTransfer, DateRange.month(now));
+      expect(s.expenseMinor, 40000);
+      expect(s.incomeMinor, 5000000);
+      expect(s.count, 3);
+    });
+
     test('category totals sorted with shares', () {
       final t = AnalyticsService.categoryTotals(txs, DateRange.month(now));
       expect(t.first.categoryId, _id(DefaultCategoryNames.shopping));

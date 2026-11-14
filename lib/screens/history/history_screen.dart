@@ -10,7 +10,7 @@ import '../../widgets/dialogs.dart';
 import '../../widgets/transaction_tile.dart';
 import '../add_transaction/add_transaction_screen.dart';
 
-enum _TypeFilter { all, expense, income }
+enum _TypeFilter { all, expense, income, transfer }
 
 enum _PeriodFilter {
   all('All time'),
@@ -26,10 +26,26 @@ enum _PeriodFilter {
 
 /// Full transaction list with search, filters, edit and delete.
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  const HistoryScreen({
+    super.key,
+    this.initialAccountId,
+    this.initialTag,
+  });
 
-  static Future<void> open(BuildContext context) => Navigator.of(context)
-      .push(MaterialPageRoute<void>(builder: (_) => const HistoryScreen()));
+  final int? initialAccountId;
+  final String? initialTag;
+
+  static Future<void> open(
+    BuildContext context, {
+    int? initialAccountId,
+    String? initialTag,
+  }) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => HistoryScreen(
+          initialAccountId: initialAccountId,
+          initialTag: initialTag,
+        ),
+      ));
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -42,6 +58,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   _PeriodFilter _period = _PeriodFilter.all;
   DateTimeRange? _custom;
   final Set<int> _categories = {};
+  late int? _accountId = widget.initialAccountId;
+  late String? _tag = widget.initialTag;
 
   /// Rows swiped away but not yet removed by the store. Filtering them out
   /// synchronously keeps Dismissible happy.
@@ -80,6 +98,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (_hidden.contains(t.id)) return false;
       if (_type == _TypeFilter.expense && !t.isExpense) return false;
       if (_type == _TypeFilter.income && !t.isIncome) return false;
+      if (_type == _TypeFilter.transfer && !t.isTransfer) return false;
+      if (_accountId != null &&
+          t.accountId != _accountId &&
+          t.toAccountId != _accountId) {
+        return false;
+      }
+      if (_tag != null && !t.tags.contains(_tag)) {
+        return false;
+      }
       if (range != null && !range.contains(t.date)) return false;
       if (_categories.isNotEmpty && !_categories.contains(t.categoryId)) {
         return false;
@@ -87,15 +114,85 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (q.isNotEmpty) {
         final cat = store.categoryById(t.categoryId)?.name.toLowerCase() ?? '';
         final amount = (t.amountMinor / 100).toStringAsFixed(2);
+        final tagMatch = t.tags.any((tag) => tag.toLowerCase().contains(q));
+        final acct = store.accountById(t.accountId)?.name.toLowerCase() ?? '';
+        final toAcct =
+            store.accountById(t.toAccountId)?.name.toLowerCase() ?? '';
         if (!t.note.toLowerCase().contains(q) &&
             !cat.contains(q) &&
             !t.paymentMethod.label.toLowerCase().contains(q) &&
-            !amount.startsWith(q)) {
+            !amount.startsWith(q) &&
+            !tagMatch &&
+            !acct.contains(q) &&
+            !toAcct.contains(q)) {
           return false;
         }
       }
       return true;
     }).toList();
+  }
+
+  Future<void> _pickAccount(FinanceStore store) async {
+    final picked = await showModalBottomSheet<int?>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('All accounts'),
+              trailing: _accountId == null
+                  ? Icon(Icons.check_rounded, color: ctx.colors.primary)
+                  : null,
+              onTap: () => Navigator.of(ctx).pop(-1),
+            ),
+            for (final a in store.accounts)
+              ListTile(
+                title: Text(a.name),
+                subtitle: Text(a.type.label),
+                trailing: _accountId == a.id
+                    ? Icon(Icons.check_rounded, color: ctx.colors.primary)
+                    : null,
+                onTap: () => Navigator.of(ctx).pop(a.id),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _accountId = picked == -1 ? null : picked);
+  }
+
+  Future<void> _pickTag(FinanceStore store) async {
+    final picked = await showModalBottomSheet<String?>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('All tags'),
+              trailing: _tag == null
+                  ? Icon(Icons.check_rounded, color: ctx.colors.primary)
+                  : null,
+              onTap: () => Navigator.of(ctx).pop(''),
+            ),
+            for (final t in store.allTags)
+              ListTile(
+                title: Text('#$t'),
+                trailing: _tag == t
+                    ? Icon(Icons.check_rounded, color: ctx.colors.primary)
+                    : null,
+                onTap: () => Navigator.of(ctx).pop(t),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _tag = picked.isEmpty ? null : picked);
   }
 
   Future<void> _pickPeriod() async {
@@ -294,9 +391,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 _TypeFilter.all => 'All',
                                 _TypeFilter.expense => 'Expenses',
                                 _TypeFilter.income => 'Income',
+                                _TypeFilter.transfer => 'Transfers',
                               }),
                               selected: _type == f,
                               onSelected: (_) => setState(() => _type = f),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          ActionChip(
+                            avatar: const Icon(Icons.account_balance_wallet_rounded,
+                                size: 18),
+                            label: Text(_accountId == null
+                                ? 'All accounts'
+                                : (store.accountById(_accountId)?.name ??
+                                    'Account')),
+                            onPressed: () => _pickAccount(store),
+                          ),
+                          const SizedBox(width: 8),
+                          if (store.allTags.isNotEmpty || _tag != null) ...[
+                            ActionChip(
+                              avatar: const Icon(Icons.tag_rounded, size: 18),
+                              label: Text(_tag == null ? 'Tags' : '#$_tag'),
+                              onPressed: () => _pickTag(store),
                             ),
                             const SizedBox(width: 8),
                           ],
@@ -374,6 +490,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             child: TransactionTile(
                               entry: t,
                               category: store.categoryById(t.categoryId),
+                              accountName: store.accountById(t.accountId)?.name,
+                              toAccountName:
+                                  store.accountById(t.toAccountId)?.name,
                               amountText: store.format(t.amountMinor),
                               onTap: () => AddTransactionScreen.open(context,
                                   existing: t),

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
 
 import '../database/default_categories.dart';
+import '../models/account.dart';
 import '../models/app_settings.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
@@ -8,6 +9,7 @@ import '../models/note.dart';
 import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
 import '../repositories/finance_repository.dart';
+import '../services/analytics_service.dart';
 import '../services/budget_service.dart';
 import '../services/csv_import_service.dart';
 import '../utils/category_icons.dart';
@@ -43,6 +45,7 @@ class FinanceStore extends ChangeNotifier {
 
   bool _loading = true;
   String? _loadError;
+  List<Account> _accounts = const [];
   List<Category> _categories = const [];
   List<TransactionEntry> _transactions = const [];
   List<CategoryBudget> _budgets = const [];
@@ -51,6 +54,7 @@ class FinanceStore extends ChangeNotifier {
   String? _notice;
   AppSettings _settings = const AppSettings();
   Map<int, Category> _categoryIndex = const {};
+  Map<int, Account> _accountIndex = const {};
 
   // Memoised smart helpers; rebuilt lazily after data changes.
   int _version = 0;
@@ -61,10 +65,73 @@ class FinanceStore extends ChangeNotifier {
 
   bool get isLoading => _loading;
   String? get loadError => _loadError;
+  List<Account> get accounts => _accounts;
   List<Category> get categories => _categories;
   List<TransactionEntry> get transactions => _transactions;
   List<CategoryBudget> get budgets => _budgets;
   ReminderScheduler get reminders => _reminders;
+
+  Account? accountById(int? id) => id == null ? null : _accountIndex[id];
+
+  Account get defaultAccount {
+    for (final a in _accounts) {
+      if (a.isDefault) return a;
+    }
+    return _accounts.isNotEmpty
+        ? _accounts.first
+        : const Account(
+            id: 1,
+            name: 'Bank Account',
+            iconKey: 'bank',
+            colorValue: 0xFF4FC3F7,
+            createdAt: null as dynamic,
+            updatedAt: null as dynamic,
+          );
+  }
+
+  /// Balance for a specific account considering income, expenses and transfers.
+  int accountBalance(int accountId) {
+    final acc = accountById(accountId);
+    if (acc == null) return 0;
+    var bal = acc.initialBalanceMinor;
+    for (final t in _transactions) {
+      if (t.accountId == accountId) {
+        if (t.isIncome) {
+          bal += t.amountMinor;
+        } else if (t.isExpense || t.isTransfer) {
+          bal -= t.amountMinor;
+        }
+      }
+      if (t.isTransfer && t.toAccountId == accountId) {
+        bal += t.amountMinor;
+      }
+    }
+    return bal;
+  }
+
+  /// Net total balance across all accounts.
+  int get totalBalanceMinor {
+    if (_accounts.isEmpty) {
+      return _settings.startingBalanceMinor +
+          AnalyticsService.lifetime(_transactions).netMinor;
+    }
+    var total = 0;
+    for (final a in _accounts) {
+      final bal = accountBalance(a.id!);
+      total += a.isCreditCard ? -bal.abs() : bal;
+    }
+    return total;
+  }
+
+  /// All unique tags found in transactions.
+  List<String> get allTags {
+    final set = <String>{};
+    for (final t in _transactions) {
+      set.addAll(t.tags);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
 
   /// Pinned first, then most recently edited.
   List<Note> get notes => _notes;
@@ -140,6 +207,7 @@ class FinanceStore extends ChangeNotifier {
       _repo.getSettings(),
       _repo.getNotes(),
       _repo.getRecurring(),
+      _repo.getAccounts(),
     ]);
     _categories = results[0] as List<Category>;
     _transactions = results[1] as List<TransactionEntry>;
@@ -151,7 +219,9 @@ class FinanceStore extends ChangeNotifier {
         return b.updatedAt.compareTo(a.updatedAt);
       });
     _recurring = results[5] as List<RecurringRule>;
+    _accounts = results[6] as List<Account>;
     _categoryIndex = {for (final c in _categories) c.id!: c};
+    _accountIndex = {for (final a in _accounts) a.id!: a};
     _version++;
     _categorizer = null;
   }
@@ -167,21 +237,77 @@ class FinanceStore extends ChangeNotifier {
     }
   }
 
+  // ------------------------------------------------------------------ accounts
+
+  Future<Account> addAccount(Account account) {
+    return _guard('create the account', () async {
+      final problems = account.validate();
+      if (problems.isNotEmpty) throw StoreException(problems.first);
+      final dup = _accounts.any(
+          (a) => a.name.toLowerCase() == account.name.trim().toLowerCase());
+      if (dup) throw StoreException('Account "${account.name}" already exists.');
+      final maxOrder =
+          _accounts.fold<int>(0, (m, a) => a.sortOrder > m ? a.sortOrder : m);
+      final created = await _repo.insertAccount(
+        account.copyWith(
+          name: account.name.trim(),
+          sortOrder: maxOrder + 1,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await _reloadAll();
+      notifyListeners();
+      return accountById(created.id!) ?? created;
+    });
+  }
+
+  Future<void> updateAccount(Account account) {
+    return _guard('update the account', () async {
+      final problems = account.validate();
+      if (problems.isNotEmpty) throw StoreException(problems.first);
+      final dup = _accounts.any((a) =>
+          a.id != account.id &&
+          a.name.toLowerCase() == account.name.trim().toLowerCase());
+      if (dup) throw StoreException('Account "${account.name}" already exists.');
+      await _repo.updateAccount(
+          account.copyWith(name: account.name.trim(), updatedAt: now));
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  Future<void> deleteAccount(Account account) {
+    return _guard('delete the account', () async {
+      if (account.isDefault) {
+        throw const StoreException('You cannot delete the primary default account.');
+      }
+      final fallback = defaultAccount.id!;
+      await _repo.deleteAccount(account.id!, reassignTo: fallback);
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
   // ------------------------------------------------------------ transactions
 
   /// Saves a new transaction. Returns budgets that crossed a warning
   /// threshold because of it, so the UI can alert immediately.
   Future<List<BudgetStatus>> addTransaction(TransactionEntry entry) {
     return _guard('save the transaction', () async {
-      _validate(entry);
+      var toSave = entry;
+      if (toSave.accountId == null && _accounts.isNotEmpty) {
+        toSave = toSave.copyWith(accountId: defaultAccount.id);
+      }
+      _validate(toSave);
       final before = budgetOverview();
       final stamp = now;
       await _repo.insertTransaction(
-          entry.copyWith(createdAt: stamp, updatedAt: stamp));
+          toSave.copyWith(createdAt: stamp, updatedAt: stamp));
       await _reloadAll();
       notifyListeners();
       await refreshDailyReminder();
-      if (!entry.isExpense) return const <BudgetStatus>[];
+      if (!toSave.isExpense) return const <BudgetStatus>[];
       return BudgetService.newlyCrossed(before: before, after: budgetOverview());
     });
   }
@@ -216,6 +342,15 @@ class FinanceStore extends ChangeNotifier {
   void _validate(TransactionEntry entry) {
     final errors = entry.validate();
     if (errors.isNotEmpty) throw StoreException(errors.first);
+    if (entry.isTransfer) {
+      if (entry.accountId == null || entry.toAccountId == null) {
+        throw const StoreException('Please select source and destination accounts.');
+      }
+      if (entry.accountId == entry.toAccountId) {
+        throw const StoreException('Source and destination accounts must be different.');
+      }
+      return;
+    }
     final cat = categoryById(entry.categoryId);
     if (cat == null) throw const StoreException('Please choose a category.');
     if (cat.kind != entry.type) {
@@ -525,6 +660,7 @@ class FinanceStore extends ChangeNotifier {
   // -------------------------------------------------------------- bulk data
 
   BackupData snapshot() => BackupData(
+        accounts: _accounts,
         categories: _categories,
         transactions: _transactions,
         budgets: _budgets,

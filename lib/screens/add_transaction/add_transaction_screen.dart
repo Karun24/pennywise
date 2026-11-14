@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/account.dart';
 import '../../models/category.dart';
 import '../../models/recurring_rule.dart';
 import '../../models/transaction_entry.dart';
@@ -9,6 +10,7 @@ import '../../services/budget_service.dart';
 import '../../services/smart/transaction_parser.dart';
 import '../../state/finance_store.dart';
 import '../../theme/theme_ext.dart';
+import '../../utils/category_icons.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/money.dart';
 import '../../widgets/common.dart';
@@ -75,12 +77,15 @@ class AddTransactionScreen extends StatefulWidget {
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _amount = TextEditingController();
   final _note = TextEditingController();
+  final _tag = TextEditingController();
   late TransactionType _type;
   int? _categoryId;
   bool _categoryManual = false;
   String? _autoReason;
   late DateTime _date;
   PaymentMethod _payment = PaymentMethod.upi;
+  int? _accountId;
+  int? _toAccountId;
 
   /// Null = does not repeat.
   late RepeatFrequency? _repeat = widget.initialRepeat;
@@ -102,10 +107,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _type = e.type;
       _amount.text = Money.toEditable(e.amountMinor);
       _note.text = e.note;
+      _tag.text = e.tag;
       _categoryId = e.categoryId;
       _categoryManual = true;
       _date = e.date;
       _payment = e.paymentMethod;
+      _accountId = e.accountId;
+      _toAccountId = e.toAccountId;
     } else {
       _type = TransactionType.expense;
       _date = DateTime.now();
@@ -118,13 +126,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _note.removeListener(_autoCategorize);
     _amount.dispose();
     _note.dispose();
+    _tag.dispose();
     super.dispose();
   }
 
   /// Rule-based auto-categorisation while typing the description. Only
   /// applies while the user has not picked a category themselves.
   void _autoCategorize() {
-    if (_categoryManual) return;
+    if (_categoryManual || _type == TransactionType.transfer) return;
     final store = context.read<FinanceStore>();
     final match = store.categorizer.suggest(_note.text, type: _type);
     if (match != null && match.confident) {
@@ -147,14 +156,26 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final store = context.read<FinanceStore>();
     setState(() {
       _type = t;
-      final current = _categoryId == null ? null : store.categoryById(_categoryId!);
-      if (current != null && current.kind != t) {
-        _categoryId = null;
-        _categoryManual = false;
-        _autoReason = null;
+      if (t == TransactionType.transfer) {
+        if (_toAccountId == null && store.accounts.length > 1) {
+          _toAccountId = store.accounts
+              .firstWhere((a) => a.id != _accountId,
+                  orElse: () => store.accounts.last)
+              .id;
+        }
+      } else {
+        final current =
+            _categoryId == null ? null : store.categoryById(_categoryId!);
+        if (current != null && current.kind != t) {
+          _categoryId = null;
+          _categoryManual = false;
+          _autoReason = null;
+        }
       }
     });
-    _autoCategorize();
+    if (t != TransactionType.transfer) {
+      _autoCategorize();
+    }
   }
 
   Future<void> _pickDate() async {
@@ -201,7 +222,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final missing = <String>[
       if (p.amountMinor == null) 'amount',
       if (p.type == null) 'type',
-      if (_categoryId == null) 'category',
+      if (_categoryId == null && _type != TransactionType.transfer) 'category',
     ];
     setState(() {
       _smartMessageIsWarning = missing.isNotEmpty;
@@ -219,10 +240,29 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       setState(() => _amountError = 'Enter an amount greater than zero');
       return;
     }
-    if (_categoryId == null) {
-      showSnack(context, 'Please choose a category.', error: true);
-      return;
+
+    final isTransfer = _type == TransactionType.transfer;
+
+    if (isTransfer) {
+      if (_accountId == null || _toAccountId == null) {
+        showSnack(context, 'Please choose both source and destination accounts.',
+            error: true);
+        return;
+      }
+      if (_accountId == _toAccountId) {
+        showSnack(context, 'Cannot transfer money to the same account.',
+            error: true);
+        return;
+      }
+      _categoryId ??= store.categories.firstOrNull?.id ?? 1;
+    } else {
+      if (_categoryId == null) {
+        showSnack(context, 'Please choose a category.', error: true);
+        return;
+      }
+      _accountId ??= store.defaultAccount.id ?? store.accounts.firstOrNull?.id;
     }
+
     setState(() {
       _amountError = null;
       _saving = true;
@@ -235,14 +275,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       categoryId: _categoryId!,
       note: _note.text.trim(),
       date: _date,
-      paymentMethod: _payment,
+      paymentMethod: isTransfer ? PaymentMethod.other : _payment,
       createdAt: widget.existing?.createdAt ?? now,
       updatedAt: now,
       recurringId: widget.existing?.recurringId,
+      accountId: _accountId,
+      toAccountId: isTransfer ? _toAccountId : null,
+      tag: _tag.text.trim().replaceAll('#', ''),
     );
     try {
       final repeat = _repeat;
-      if (!_editing && repeat != null) {
+      if (!_editing && repeat != null && !isTransfer) {
         final rule = await store.addRecurring(entry, repeat);
         final started = !rule.nextDue.isAtSameMomentAs(
             DateTime(_date.year, _date.month, _date.day));
@@ -260,7 +303,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       } else {
         final crossed = await store.addTransaction(entry);
         navigator.pop(_ScreenResult(
-          '${_type.label} of ${store.format(minor)} saved.',
+          isTransfer
+              ? 'Transfer of ${store.format(minor)} saved.'
+              : '${_type.label} of ${store.format(minor)} saved.',
           alerts: crossed.map((s) => _alertText(store, s)).toList(),
         ));
       }
@@ -304,9 +349,23 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget build(BuildContext context) {
     final store = context.watch<FinanceStore>();
     final currency = store.currency;
-    final typeColor = _type == TransactionType.expense
-        ? context.penny.expense
-        : context.penny.income;
+    final typeColor = switch (_type) {
+      TransactionType.expense => context.penny.expense,
+      TransactionType.income => context.penny.income,
+      TransactionType.transfer => context.penny.accent,
+    };
+
+    if (_accountId == null && store.accounts.isNotEmpty) {
+      _accountId = store.defaultAccount.id ?? store.accounts.first.id;
+    }
+    if (_type == TransactionType.transfer &&
+        _toAccountId == null &&
+        store.accounts.length > 1) {
+      _toAccountId = store.accounts
+          .firstWhere((a) => a.id != _accountId,
+              orElse: () => store.accounts.last)
+          .id;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -373,9 +432,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       values: TransactionType.values,
                       selected: _type,
                       labelOf: (t) => t.label,
-                      colorOf: (t) => t == TransactionType.expense
-                          ? context.penny.expense
-                          : context.penny.income,
+                      colorOf: (t) => switch (t) {
+                        TransactionType.expense => context.penny.expense,
+                        TransactionType.income => context.penny.income,
+                        TransactionType.transfer => context.penny.accent,
+                      },
                       onChanged: _setType,
                     ),
                     const SizedBox(height: 20),
@@ -406,55 +467,150 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       },
                     ),
                     const SizedBox(height: 18),
-                    _Label('Description'),
-                    TextField(
-                      controller: _note,
-                      maxLength: 120,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        hintText: 'e.g. Lunch at Swiggy',
-                        counterText: '',
-                        prefixIcon: Icon(Icons.notes_rounded),
+                    if (_type == TransactionType.transfer) ...[
+                      _Label('Transfer from'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final a in store.accounts)
+                            ChoiceChip(
+                              avatar: Icon(CategoryIcons.of(a.iconKey),
+                                  size: 16, color: a.color),
+                              label: Text(a.name),
+                              selected: _accountId == a.id,
+                              onSelected: (_) =>
+                                  setState(() => _accountId = a.id),
+                            ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(child: _Label('Category')),
-                        if (_autoReason != null && !_categoryManual)
-                          Flexible(
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Pill(
-                                icon: Icons.auto_awesome_rounded,
-                                label: 'Auto · $_autoReason',
-                                color: context.penny.accent,
+                      const SizedBox(height: 18),
+                      _Label('Transfer to'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final a in store.accounts)
+                            ChoiceChip(
+                              avatar: Icon(CategoryIcons.of(a.iconKey),
+                                  size: 16, color: a.color),
+                              label: Text(a.name),
+                              selected: _toAccountId == a.id,
+                              onSelected: (_) =>
+                                  setState(() => _toAccountId = a.id),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _Label('Description (optional)'),
+                      TextField(
+                        controller: _note,
+                        maxLength: 120,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. ATM withdrawal, Credit card payment',
+                          counterText: '',
+                          prefixIcon: Icon(Icons.notes_rounded),
+                        ),
+                      ),
+                    ] else ...[
+                      if (store.accounts.isNotEmpty) ...[
+                        _Label(_type == TransactionType.expense
+                            ? 'Paid from account'
+                            : 'Deposit into account'),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final a in store.accounts)
+                              ChoiceChip(
+                                avatar: Icon(CategoryIcons.of(a.iconKey),
+                                    size: 16, color: a.color),
+                                label: Text(a.name),
+                                selected: _accountId == a.id,
+                                onSelected: (_) =>
+                                    setState(() => _accountId = a.id),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                      _Label('Description'),
+                      TextField(
+                        controller: _note,
+                        maxLength: 120,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. Lunch at Swiggy',
+                          counterText: '',
+                          prefixIcon: Icon(Icons.notes_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(child: _Label('Category')),
+                          if (_autoReason != null && !_categoryManual)
+                            Flexible(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Pill(
+                                  icon: Icons.auto_awesome_rounded,
+                                  label: 'Auto · $_autoReason',
+                                  color: context.penny.accent,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
+                      _CategoryGrid(
+                        categories: store.categoriesOf(_type),
+                        selectedId: _categoryId,
+                        onSelect: (c) => setState(() {
+                          _categoryId = c.id;
+                          _categoryManual = true;
+                          _autoReason = null;
+                        }),
+                        onCreate: () async {
+                          final created = await showCategoryEditor(context,
+                              initialKind: _type);
+                          if (created != null && mounted) {
+                            setState(() {
+                              _type = created.kind;
+                              _categoryId = created.id;
+                              _categoryManual = true;
+                              _autoReason = null;
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    _Label('Event / Trip tag (optional)'),
+                    TextField(
+                      controller: _tag,
+                      maxLength: 30,
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. GoaTrip, Diwali, Vacation',
+                        counterText: '',
+                        prefixIcon: Icon(Icons.tag_rounded),
+                      ),
                     ),
-                    _CategoryGrid(
-                      categories: store.categoriesOf(_type),
-                      selectedId: _categoryId,
-                      onSelect: (c) => setState(() {
-                        _categoryId = c.id;
-                        _categoryManual = true;
-                        _autoReason = null;
-                      }),
-                      onCreate: () async {
-                        final created = await showCategoryEditor(context,
-                            initialKind: _type);
-                        if (created != null && mounted) {
-                          setState(() {
-                            _type = created.kind;
-                            _categoryId = created.id;
-                            _categoryManual = true;
-                            _autoReason = null;
-                          });
-                        }
-                      },
-                    ),
+                    if (store.allTags.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final t in store.allTags)
+                            ActionChip(
+                              visualDensity: VisualDensity.compact,
+                              label: Text('#$t'),
+                              onPressed: () => setState(() => _tag.text = t),
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     _Label('Date'),
                     Wrap(
@@ -469,10 +625,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         _DateChip(
                           label: 'Yesterday',
                           selected: DateUtilsX.isSameDay(
-                              _date,
-                              DateUtilsX.addDays(DateTime.now(), -1)),
-                          onTap: () => setState(() => _setDay(
-                              DateUtilsX.addDays(DateTime.now(), -1))),
+                              _date, DateUtilsX.addDays(DateTime.now(), -1)),
+                          onTap: () => setState(() =>
+                              _setDay(DateUtilsX.addDays(DateTime.now(), -1))),
                         ),
                         ActionChip(
                           avatar: const Icon(Icons.calendar_month_rounded,
@@ -482,54 +637,56 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-                    _Label('Payment method'),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final m in PaymentMethod.values)
-                          ChoiceChip(
-                            label: Text(m.label),
-                            selected: _payment == m,
-                            onSelected: (_) => setState(() => _payment = m),
-                          ),
-                      ],
-                    ),
-                    if (!_editing) ...[
+                    if (_type != TransactionType.transfer) ...[
                       const SizedBox(height: 18),
-                      _Label('Repeat'),
+                      _Label('Payment method'),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          ChoiceChip(
-                            label: const Text('Never'),
-                            selected: _repeat == null,
-                            onSelected: (_) => setState(() => _repeat = null),
-                          ),
-                          for (final f in RepeatFrequency.values)
+                          for (final m in PaymentMethod.values)
                             ChoiceChip(
-                              avatar: _repeat == f
-                                  ? const Icon(Icons.repeat_rounded, size: 16)
-                                  : null,
-                              label: Text(f.label),
-                              selected: _repeat == f,
-                              onSelected: (_) => setState(() => _repeat = f),
+                              label: Text(m.label),
+                              selected: _payment == m,
+                              onSelected: (_) => setState(() => _payment = m),
                             ),
                         ],
                       ),
-                      if (_repeat != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8, left: 2),
-                          child: Text(
-                            'PennyWise will add this automatically '
-                            '${_repeatHint(_repeat!, _date)}, starting '
-                            '${DateUtilsX.dayMonthYear(_date)}. Manage it in '
-                            'Profile > Recurring transactions.',
-                            style: context.text.bodySmall,
-                          ),
+                      if (!_editing) ...[
+                        const SizedBox(height: 18),
+                        _Label('Repeat'),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('Never'),
+                              selected: _repeat == null,
+                              onSelected: (_) => setState(() => _repeat = null),
+                            ),
+                            for (final f in RepeatFrequency.values)
+                              ChoiceChip(
+                                avatar: _repeat == f
+                                    ? const Icon(Icons.repeat_rounded, size: 16)
+                                    : null,
+                                label: Text(f.label),
+                                selected: _repeat == f,
+                                onSelected: (_) => setState(() => _repeat = f),
+                              ),
+                          ],
                         ),
+                        if (_repeat != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, left: 2),
+                            child: Text(
+                              'PennyWise will add this automatically '
+                              '${_repeatHint(_repeat!, _date)}, starting '
+                              '${DateUtilsX.dayMonthYear(_date)}. Manage it in '
+                              'Profile > Recurring transactions.',
+                              style: context.text.bodySmall,
+                            ),
+                          ),
+                      ],
                     ],
                   ],
                 ),
@@ -550,10 +707,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           )
                         : Text(_editing
                             ? 'Save changes'
-                            : _repeat != null
-                                ? 'Save ${_repeat!.label.toLowerCase()} '
-                                    '${_type.label.toLowerCase()}'
-                                : 'Save ${_type.label.toLowerCase()}'),
+                            : _type == TransactionType.transfer
+                                ? 'Save transfer'
+                                : _repeat != null
+                                    ? 'Save ${_repeat!.label.toLowerCase()} '
+                                        '${_type.label.toLowerCase()}'
+                                    : 'Save ${_type.label.toLowerCase()}'),
                   ),
                 ),
               ),

@@ -64,10 +64,11 @@ class AnalyticsService {
     var income = 0, expense = 0, count = 0;
     for (final t in txs) {
       if (!range.contains(t.date)) continue;
+      if (t.isTransfer) continue;
       count++;
       if (t.isIncome) {
         income += t.amountMinor;
-      } else {
+      } else if (t.isExpense) {
         expense += t.amountMinor;
       }
     }
@@ -79,10 +80,11 @@ class AnalyticsService {
   static PeriodSummary lifetime(Iterable<TransactionEntry> txs) {
     var income = 0, expense = 0, count = 0;
     for (final t in txs) {
+      if (t.isTransfer) continue;
       count++;
       if (t.isIncome) {
         income += t.amountMinor;
-      } else {
+      } else if (t.isExpense) {
         expense += t.amountMinor;
       }
     }
@@ -127,7 +129,7 @@ class AnalyticsService {
     final exp = List<int>.filled(days, 0);
     final inc = List<int>.filled(days, 0);
     for (final t in txs) {
-      if (!range.contains(t.date)) continue;
+      if (!range.contains(t.date) || t.isTransfer) continue;
       // Rounding keeps the index correct across DST transitions.
       final index =
           (DateUtilsX.dateOnly(t.date).difference(range.start).inHours / 24)
@@ -135,7 +137,7 @@ class AnalyticsService {
       if (index < 0 || index >= days) continue;
       if (t.isIncome) {
         inc[index] += t.amountMinor;
-      } else {
+      } else if (t.isExpense) {
         exp[index] += t.amountMinor;
       }
     }
@@ -181,10 +183,11 @@ class AnalyticsService {
     final inc = <int, int>{};
     int key(DateTime d) => d.year * 12 + d.month;
     for (final t in txs) {
+      if (t.isTransfer) continue;
       final k = key(t.date);
       if (t.isIncome) {
         inc[k] = (inc[k] ?? 0) + t.amountMinor;
-      } else {
+      } else if (t.isExpense) {
         exp[k] = (exp[k] ?? 0) + t.amountMinor;
       }
     }

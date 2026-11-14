@@ -97,7 +97,10 @@ class _CategoryEditorState extends State<_CategoryEditor> {
             const SizedBox(height: 18),
             if (!editing) ...[
               PennySegmented<TransactionType>(
-                values: TransactionType.values,
+                values: const [
+                  TransactionType.expense,
+                  TransactionType.income,
+                ],
                 selected: _kind,
                 labelOf: (t) => t.label,
                 colorOf: (t) => t == TransactionType.expense

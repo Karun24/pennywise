@@ -33,6 +33,8 @@ class CategoryIcons {
     'refund': Icons.replay_rounded,
     'savings': Icons.savings_rounded,
     'bank': Icons.account_balance_rounded,
+    'wallet': Icons.account_balance_wallet_rounded,
+    'creditCard': Icons.credit_card_rounded,
     'payments': Icons.payments_rounded,
     'other': Icons.category_rounded,
   };

@@ -64,7 +64,10 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
             padding: pagePadding(context, top: 4, bottom: 96),
             children: [
               PennySegmented<TransactionType>(
-                values: TransactionType.values,
+                values: const [
+                  TransactionType.expense,
+                  TransactionType.income,
+                ],
                 selected: _kind,
                 labelOf: (t) => t == TransactionType.expense
                     ? 'Expense categories'

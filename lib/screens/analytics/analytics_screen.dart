@@ -604,6 +604,7 @@ class _TopExpenses extends StatelessWidget {
             TransactionTile(
               entry: t,
               category: store.categoryById(t.categoryId),
+              accountName: store.accountById(t.accountId)?.name,
               amountText: store.format(t.amountMinor),
               showDate: true,
               dateText: DateUtilsX.dayMonth(t.date),

@@ -8,6 +8,7 @@ import '../../services/reminder_service.dart';
 import '../../state/finance_store.dart';
 import '../../state/shell_controller.dart';
 import '../../theme/theme_ext.dart';
+import '../../utils/category_icons.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/money.dart';
 import '../../widgets/charts/bar_chart.dart';
@@ -21,6 +22,8 @@ import '../add_transaction/add_transaction_screen.dart';
 import '../history/history_screen.dart';
 import '../notes/note_editor_screen.dart';
 import '../notes/notes_screen.dart';
+import '../settings/account_editor_sheet.dart';
+import '../settings/manage_accounts_screen.dart';
 
 /// The dashboard: balance, this month, insights, charts, budgets, recent.
 class HomeScreen extends StatelessWidget {
@@ -39,6 +42,8 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 18),
             const UpdateBanner(),
             const _BalanceCard(),
+            const SizedBox(height: 16),
+            const _AccountsStrip(),
             const SizedBox(height: 16),
             const _NextReminderCard(),
             if (!store.hasTransactions)
@@ -127,7 +132,9 @@ class _BalanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.watch<FinanceStore>();
     final life = AnalyticsService.lifetime(store.transactions);
-    final balance = store.settings.startingBalanceMinor + life.netMinor;
+    final balance = store.accounts.isNotEmpty
+        ? store.totalBalanceMinor
+        : (store.settings.startingBalanceMinor + life.netMinor);
     final c = store.currency;
     const white = Colors.white;
 
@@ -233,6 +240,135 @@ class _BalanceCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AccountsStrip extends StatelessWidget {
+  const _AccountsStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<FinanceStore>();
+    final currency = store.currency;
+    final accounts = store.accounts;
+    if (accounts.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Accounts & Wallets', style: context.text.titleSmall),
+            const Spacer(),
+            TextButton(
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              onPressed: () => ManageAccountsScreen.open(context),
+              child: const Text('Manage'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 88,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: accounts.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              if (i == accounts.length) {
+                return Center(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => showAccountEditor(context),
+                    child: Container(
+                      width: 56,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: context.penny.border,
+                        ),
+                      ),
+                      child: Icon(Icons.add_rounded,
+                          color: context.colors.primary),
+                    ),
+                  ),
+                );
+              }
+
+              final a = accounts[i];
+              final balance = store.accountBalance(a.id!);
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () =>
+                    HistoryScreen.open(context, initialAccountId: a.id),
+                child: Container(
+                  width: 154,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: context.penny.surfaceHigh,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: a.isDefault
+                          ? a.color.withValues(alpha: 0.5)
+                          : context.penny.border,
+                      width: a.isDefault ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: a.color.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              CategoryIcons.of(a.iconKey),
+                              size: 16,
+                              color: a.color,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              a.name,
+                              style: context.text.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        Money.format(balance, currency),
+                        style: context.text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: tabularFigures,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -771,6 +907,8 @@ class _RecentCard extends StatelessWidget {
             TransactionTile(
               entry: t,
               category: store.categoryById(t.categoryId),
+              accountName: store.accountById(t.accountId)?.name,
+              toAccountName: store.accountById(t.toAccountId)?.name,
               amountText: store.format(t.amountMinor),
               showDate: true,
               dateText: DateUtilsX.relativeDay(t.date, now: store.now),

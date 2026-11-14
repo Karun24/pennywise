@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 
 import '../database/app_database.dart';
+import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
@@ -20,6 +21,7 @@ class SqliteFinanceRepository implements FinanceRepository {
   static const _s = AppDatabase.tSettings;
   static const _n = AppDatabase.tNotes;
   static const _r = AppDatabase.tRecurring;
+  static const _a = AppDatabase.tAccounts;
 
   @override
   Future<void> init() async {
@@ -27,6 +29,43 @@ class SqliteFinanceRepository implements FinanceRepository {
             await _db.rawQuery('SELECT COUNT(*) FROM $_c')) ??
         0;
     if (count == 0) await AppDatabase.seedDefaultCategories(_db);
+
+    final aCount = Sqflite.firstIntValue(
+            await _db.rawQuery('SELECT COUNT(*) FROM $_a')) ??
+        0;
+    if (aCount == 0) await AppDatabase.seedDefaultAccounts(_db);
+  }
+
+  // ------------------------------------------------------------------ accounts
+
+  @override
+  Future<List<Account>> getAccounts() async {
+    final rows = await _db.query(_a, orderBy: 'sort_order ASC, id ASC');
+    return rows.map(Account.fromMap).toList();
+  }
+
+  @override
+  Future<Account> insertAccount(Account account) async {
+    final id = await _db.insert(_a, account.toMap()..remove('id'),
+        conflictAlgorithm: ConflictAlgorithm.abort);
+    return account.copyWith(id: id);
+  }
+
+  @override
+  Future<void> updateAccount(Account account) async {
+    await _db.update(_a, account.toMap()..remove('id'),
+        where: 'id = ?', whereArgs: [account.id]);
+  }
+
+  @override
+  Future<void> deleteAccount(int id, {required int reassignTo}) async {
+    await _db.transaction((txn) async {
+      await txn.update(_t, {'account_id': reassignTo},
+          where: 'account_id = ?', whereArgs: [id]);
+      await txn.update(_t, {'to_account_id': reassignTo},
+          where: 'to_account_id = ?', whereArgs: [id]);
+      await txn.delete(_a, where: 'id = ? AND is_default = 0', whereArgs: [id]);
+    });
   }
 
   // ---------------------------------------------------------------- categories
@@ -224,7 +263,11 @@ class SqliteFinanceRepository implements FinanceRepository {
       await txn.delete(_c);
       await txn.delete(_s);
       await txn.delete(_n);
+      await txn.delete(_a);
       final batch = txn.batch();
+      for (final a in data.accounts) {
+        batch.insert(_a, a.toMap());
+      }
       for (final c in data.categories) {
         batch.insert(_c, c.toMap());
       }
@@ -256,7 +299,9 @@ class SqliteFinanceRepository implements FinanceRepository {
       await txn.delete(_c);
       await txn.delete(_s);
       await txn.delete(_n);
+      await txn.delete(_a);
       await AppDatabase.seedDefaultCategories(txn);
+      await AppDatabase.seedDefaultAccounts(txn);
     });
   }
 }

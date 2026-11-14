@@ -1,4 +1,6 @@
+import '../database/app_database.dart';
 import '../database/default_categories.dart';
+import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
@@ -8,12 +10,14 @@ import 'finance_repository.dart';
 
 /// Volatile implementation used by tests (and usable as a fallback).
 class InMemoryFinanceRepository implements FinanceRepository {
+  final List<Account> _accounts = [];
   final List<Category> _categories = [];
   final List<TransactionEntry> _transactions = [];
   final Map<int, CategoryBudget> _budgets = {};
   final Map<String, String> _settings = {};
   final List<Note> _notes = [];
   final List<RecurringRule> _recurring = [];
+  int _nextAccountId = 1;
   int _nextRecurringId = 1;
   int _nextCategoryId = 1;
   int _nextTransactionId = 1;
@@ -25,13 +29,56 @@ class InMemoryFinanceRepository implements FinanceRepository {
   }
 
   void _seed() {
+    for (final a in AppDatabase.buildDefaultAccounts()) {
+      _accounts.add(a.copyWith(id: _nextAccountId++));
+    }
     for (final c in buildDefaultCategories()) {
       _categories.add(c.copyWith(id: _nextCategoryId++));
     }
   }
 
+  // ------------------------------------------------------------------ accounts
+
   @override
-  Future<List<Category>> getCategories() async {
+  Future<List<Account>> getAccounts() async {
+    final list = List<Account>.of(_accounts)
+      ..sort((a, b) => a.sortOrder != b.sortOrder
+          ? a.sortOrder.compareTo(b.sortOrder)
+          : a.id!.compareTo(b.id!));
+    return list;
+  }
+
+  @override
+  Future<Account> insertAccount(Account account) async {
+    final dup = _accounts.any(
+        (a) => a.name.toLowerCase() == account.name.toLowerCase());
+    if (dup) throw StateError('Account already exists');
+    final stored = account.copyWith(id: _nextAccountId++);
+    _accounts.add(stored);
+    return stored;
+  }
+
+  @override
+  Future<void> updateAccount(Account account) async {
+    final i = _accounts.indexWhere((a) => a.id == account.id);
+    if (i >= 0) _accounts[i] = account;
+  }
+
+  @override
+  Future<void> deleteAccount(int id, {required int reassignTo}) async {
+    for (var i = 0; i < _transactions.length; i++) {
+      final t = _transactions[i];
+      if (t.accountId == id || t.toAccountId == id) {
+        _transactions[i] = t.copyWith(
+          accountId: t.accountId == id ? reassignTo : t.accountId,
+          toAccountId: t.toAccountId == id ? reassignTo : t.toAccountId,
+        );
+      }
+    }
+    _accounts.removeWhere((a) => a.id == id && !a.isDefault);
+  }
+
+  // ---------------------------------------------------------------- categories
     final list = List<Category>.of(_categories)
       ..sort((a, b) => a.sortOrder != b.sortOrder
           ? a.sortOrder.compareTo(b.sortOrder)
@@ -204,6 +251,11 @@ class InMemoryFinanceRepository implements FinanceRepository {
 
   @override
   Future<void> replaceAll(BackupData data) async {
+    _accounts
+      ..clear()
+      ..addAll(data.accounts.isEmpty
+          ? AppDatabase.buildDefaultAccounts()
+          : data.accounts);
     _categories
       ..clear()
       ..addAll(data.categories);
@@ -224,6 +276,7 @@ class InMemoryFinanceRepository implements FinanceRepository {
       ..addAll(data.recurring);
     int maxId(Iterable<int?> ids) =>
         ids.fold<int>(0, (m, id) => (id ?? 0) > m ? id! : m);
+    _nextAccountId = maxId(_accounts.map((a) => a.id)) + 1;
     _nextCategoryId = maxId(_categories.map((c) => c.id)) + 1;
     _nextTransactionId = maxId(_transactions.map((t) => t.id)) + 1;
     _nextNoteId = maxId(_notes.map((n) => n.id)) + 1;
@@ -232,12 +285,14 @@ class InMemoryFinanceRepository implements FinanceRepository {
 
   @override
   Future<void> clearAll() async {
+    _accounts.clear();
     _categories.clear();
     _transactions.clear();
     _budgets.clear();
     _settings.clear();
     _notes.clear();
     _recurring.clear();
+    _nextAccountId = 1;
     _nextRecurringId = 1;
     _nextCategoryId = 1;
     _nextTransactionId = 1;

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pennywise/database/default_categories.dart';
+import 'package:pennywise/models/account.dart';
 import 'package:pennywise/models/category.dart';
 import 'package:pennywise/models/note.dart';
 import 'package:pennywise/models/transaction_entry.dart';
@@ -201,12 +202,94 @@ void main() {
       await other.restore(decoded);
       expect(other.notes.single.body, 'Pay landlord');
 
-      // A version-1 backup has no "notes" section.
+      // A version-1 backup has no "notes" or "accounts" section.
       final v1 = BackupService.encode(s.snapshot())
-          .replaceFirst('"version": 3', '"version": 1');
+          .replaceFirst(RegExp(r'"version":\s*\d+'), '"version": 1');
       final old = BackupService.decode(v1.replaceAll(
           RegExp(r',\s*"notes": \[[\s\S]*\]\s*}\s*$'), '\n}'));
       expect(old.notes, isEmpty);
+      expect(old.accounts, isEmpty);
+    });
+  });
+
+  group('accounts, transfers and tags', () {
+    test('seeds default accounts', () async {
+      final s = await newStore();
+      expect(s.accounts.length, 2);
+      expect(s.defaultAccount.name, 'Bank Account');
+    });
+
+    test('add, update and delete account with fallback reassignment', () async {
+      final s = await newStore();
+      final wallet = await s.addAccount(Account(
+        name: 'Amazon Pay',
+        type: AccountType.other,
+        iconKey: 'wallet',
+        colorValue: 0xFF81C784,
+        initialBalanceMinor: 50000,
+        createdAt: now,
+        updatedAt: now,
+      ));
+      expect(s.accounts.any((a) => a.name == 'Amazon Pay'), isTrue);
+      expect(s.accountBalance(wallet.id!), 50000);
+
+      // Rejects duplicates
+      await expectLater(
+        s.addAccount(wallet.copyWith(name: 'amazon pay')),
+        throwsA(isA<StoreException>()),
+      );
+
+      // Add transaction to wallet
+      await s.addTransaction(expense(s, 10000, DefaultCategoryNames.food)
+          .copyWith(accountId: wallet.id));
+      expect(s.accountBalance(wallet.id!), 40000);
+
+      // Delete wallet reassigns transactions to default account
+      await s.deleteAccount(wallet);
+      expect(s.accounts.any((a) => a.name == 'Amazon Pay'), isFalse);
+      expect(s.transactions.single.accountId, s.defaultAccount.id);
+    });
+
+    test('transfers correctly update source and target balances', () async {
+      final s = await newStore();
+      final bank = s.defaultAccount;
+      final cash = s.accounts.firstWhere((a) => a.name == 'Cash');
+
+      // Set initial balance on bank
+      await s.updateAccount(bank.copyWith(initialBalanceMinor: 100000));
+      expect(s.accountBalance(bank.id!), 100000);
+      expect(s.accountBalance(cash.id!), 0);
+      expect(s.totalBalanceMinor, 100000);
+
+      // Transfer 200 from bank to cash
+      final transfer = TransactionEntry(
+        type: TransactionType.transfer,
+        amountMinor: 20000,
+        categoryId: s.categories.first.id!,
+        note: 'ATM cash withdrawal',
+        date: now,
+        paymentMethod: PaymentMethod.other,
+        createdAt: now,
+        updatedAt: now,
+        accountId: bank.id,
+        toAccountId: cash.id,
+        tag: 'ATM',
+      );
+      await s.addTransaction(transfer);
+
+      // Bank has 800, Cash has 200, Total is still 1000
+      expect(s.accountBalance(bank.id!), 80000);
+      expect(s.accountBalance(cash.id!), 20000);
+      expect(s.totalBalanceMinor, 100000);
+    });
+
+    test('tags are extracted from tag property and note hashtags', () async {
+      final s = await newStore();
+      await s.addTransaction(expense(s, 1500, DefaultCategoryNames.food,
+              note: 'Dinner at shack #Goa2026 #Beach')
+          .copyWith(tag: 'Vacation'));
+
+      expect(s.allTags, containsAll(['Vacation', 'Goa2026', 'Beach']));
     });
   });
 }

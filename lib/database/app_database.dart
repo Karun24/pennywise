@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import '../models/account.dart';
 import 'default_categories.dart';
 
 /// Owns the SQLite schema and migrations.
@@ -13,7 +14,7 @@ class AppDatabase {
   static const fileName = 'pennywise.db';
 
   /// Bump this and add a step in [_onUpgrade] whenever the schema changes.
-  static const schemaVersion = 3;
+  static const schemaVersion = 4;
 
   static const tCategories = 'categories';
   static const tTransactions = 'transactions';
@@ -21,6 +22,7 @@ class AppDatabase {
   static const tSettings = 'settings';
   static const tNotes = 'notes';
   static const tRecurring = 'recurring';
+  static const tAccounts = 'accounts';
 
   static Future<Database> open({String? overridePath}) async {
     final path = overridePath ?? p.join(await getDatabasesPath(), fileName);
@@ -33,6 +35,7 @@ class AppDatabase {
       onCreate: (db, version) async {
         await _createSchema(db);
         await seedDefaultCategories(db);
+        await seedDefaultAccounts(db);
       },
       onUpgrade: _onUpgrade,
     );
@@ -51,10 +54,11 @@ class AppDatabase {
         UNIQUE (name, kind)
       )
     ''');
+    await _createAccounts(db);
     await db.execute('''
       CREATE TABLE $tTransactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT NOT NULL CHECK (type IN ('expense', 'income')),
+        type TEXT NOT NULL CHECK (type IN ('expense', 'income', 'transfer')),
         amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
         category_id INTEGER NOT NULL
           REFERENCES $tCategories(id) ON DELETE RESTRICT,
@@ -63,13 +67,20 @@ class AppDatabase {
         occurred_at INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        recurring_id INTEGER
+        recurring_id INTEGER,
+        account_id INTEGER
+          REFERENCES $tAccounts(id) ON DELETE SET NULL,
+        to_account_id INTEGER
+          REFERENCES $tAccounts(id) ON DELETE SET NULL,
+        tag TEXT NOT NULL DEFAULT ''
       )
     ''');
     await db.execute(
         'CREATE INDEX idx_tx_occurred_at ON $tTransactions(occurred_at)');
     await db.execute(
         'CREATE INDEX idx_tx_category ON $tTransactions(category_id)');
+    await db.execute(
+        'CREATE INDEX idx_tx_account ON $tTransactions(account_id)');
     await db.execute('''
       CREATE TABLE $tBudgets (
         category_id INTEGER PRIMARY KEY
@@ -85,6 +96,25 @@ class AppDatabase {
     ''');
     await _createNotes(db);
     await _createRecurring(db);
+  }
+
+  /// Added in schema version 4.
+  static Future<void> _createAccounts(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tAccounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL COLLATE NOCASE,
+        type TEXT NOT NULL,
+        icon_key TEXT NOT NULL,
+        color INTEGER NOT NULL,
+        initial_balance_minor INTEGER NOT NULL DEFAULT 0,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (name)
+      )
+    ''');
   }
 
   /// Added in schema version 3.
@@ -131,6 +161,81 @@ class AppDatabase {
           'ALTER TABLE $tTransactions ADD COLUMN recurring_id INTEGER');
       await _createRecurring(db);
     }
+    if (oldVersion < 4) {
+      await _createAccounts(db);
+      await seedDefaultAccounts(db);
+      // Migrate transactions table to support 'transfer' type and account columns.
+      await db.execute('''
+        CREATE TABLE new_tx (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT NOT NULL CHECK (type IN ('expense', 'income', 'transfer')),
+          amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+          category_id INTEGER NOT NULL
+            REFERENCES $tCategories(id) ON DELETE RESTRICT,
+          note TEXT NOT NULL DEFAULT '',
+          payment_method TEXT NOT NULL DEFAULT 'other',
+          occurred_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          recurring_id INTEGER,
+          account_id INTEGER
+            REFERENCES $tAccounts(id) ON DELETE SET NULL,
+          to_account_id INTEGER
+            REFERENCES $tAccounts(id) ON DELETE SET NULL,
+          tag TEXT NOT NULL DEFAULT ''
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO new_tx (id, type, amount_minor, category_id, note, payment_method, occurred_at, created_at, updated_at, recurring_id, account_id, to_account_id, tag)
+        SELECT id, type, amount_minor, category_id, note, payment_method, occurred_at, created_at, updated_at, recurring_id, 1, NULL, ''
+        FROM $tTransactions
+      ''');
+      await db.execute('DROP TABLE $tTransactions');
+      await db.execute('ALTER TABLE new_tx RENAME TO $tTransactions');
+      await db.execute(
+          'CREATE INDEX idx_tx_occurred_at ON $tTransactions(occurred_at)');
+      await db.execute(
+          'CREATE INDEX idx_tx_category ON $tTransactions(category_id)');
+      await db.execute(
+          'CREATE INDEX idx_tx_account ON $tTransactions(account_id)');
+    }
+  }
+
+  static List<Account> buildDefaultAccounts({int startingBalanceMinor = 0}) {
+    final now = DateTime.now();
+    return [
+      Account(
+        name: 'Bank Account',
+        type: AccountType.regular,
+        iconKey: 'bank',
+        colorValue: 0xFF4FC3F7,
+        initialBalanceMinor: startingBalanceMinor,
+        isDefault: true,
+        sortOrder: 0,
+        createdAt: now,
+        updatedAt: now,
+      ),
+      Account(
+        name: 'Cash',
+        type: AccountType.cash,
+        iconKey: 'wallet',
+        colorValue: 0xFF81C784,
+        initialBalanceMinor: 0,
+        isDefault: false,
+        sortOrder: 1,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ];
+  }
+
+  static Future<void> seedDefaultAccounts(DatabaseExecutor db) async {
+    final batch = db.batch();
+    for (final a in buildDefaultAccounts()) {
+      batch.insert(tAccounts, a.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+    await batch.commit(noResult: true);
   }
 
   static Future<void> seedDefaultCategories(DatabaseExecutor db) async {

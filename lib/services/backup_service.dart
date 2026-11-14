@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../database/app_database.dart';
+import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
 import '../models/note.dart';
@@ -21,14 +23,15 @@ class BackupService {
 
   static const formatId = 'pennywise-backup';
   /// 1 = transactions/categories/budgets/settings, 2 = + notes,
-  /// 3 = + recurring rules.
-  static const formatVersion = 3;
+  /// 3 = + recurring rules, 4 = + accounts.
+  static const formatVersion = 4;
 
   static String encode(BackupData data) {
     final json = {
       'format': formatId,
       'version': formatVersion,
       'exportedAt': (data.exportedAt ?? DateTime.now()).toIso8601String(),
+      'accounts': data.accounts.map((a) => a.toMap()).toList(),
       'categories': data.categories.map((c) => c.toMap()).toList(),
       'transactions': data.transactions.map((t) => t.toMap()).toList(),
       'budgets': data.budgets.map((b) => b.toMap()).toList(),
@@ -85,6 +88,17 @@ class BackupService {
         rawSettings.forEach((k, v) => settings[k.toString()] = '${v ?? ''}');
       }
 
+      // Accounts were added in version 4; older backups use defaults.
+      final accounts = map['accounts'] == null
+          ? AppDatabase.buildDefaultAccounts()
+          : list('accounts').map(Account.fromMap).toList();
+      final accountIds = <int>{};
+      for (final a in accounts) {
+        if (a.id == null || !accountIds.add(a.id!)) {
+          throw const BackupFormatException('Duplicate or missing account id.');
+        }
+      }
+
       // Notes were added in version 2; older backups simply have none.
       final notes = map['notes'] == null
           ? <Note>[]
@@ -112,12 +126,15 @@ class BackupService {
 
       _validate(categories, transactions, budgets);
       return BackupData(
+        accounts: accounts,
         categories: categories,
         transactions: transactions,
         budgets: budgets,
         settings: settings,
         notes: notes,
         recurring: recurring,
+        exportedAt: DateTime.tryParse('${map['exportedAt']}'),
+      );
         exportedAt: DateTime.tryParse('${map['exportedAt']}'),
       );
     } on BackupFormatException {

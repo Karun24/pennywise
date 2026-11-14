@@ -18,6 +18,7 @@ import '../../widgets/segmented.dart';
 import '../../widgets/update_widgets.dart';
 import '../notes/notes_screen.dart';
 import '../recurring/recurring_screen.dart';
+import 'manage_accounts_screen.dart';
 import 'manage_categories_screen.dart';
 
 /// Profile & settings: preferences, money, categories, data, privacy.
@@ -81,6 +82,12 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Starting balance',
                 value: Money.format(s.startingBalanceMinor, c),
                 onTap: () => _editStartingBalance(context),
+              ),
+              _Tile(
+                icon: Icons.account_balance_rounded,
+                title: 'Manage accounts & wallets',
+                value: '${store.accounts.length}',
+                onTap: () => ManageAccountsScreen.open(context),
               ),
               _Tile(
                 icon: Icons.category_rounded,

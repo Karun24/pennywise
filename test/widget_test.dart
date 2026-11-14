@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pennywise/app.dart';
 import 'package:pennywise/repositories/in_memory_finance_repository.dart';
 import 'package:pennywise/screens/add_transaction/add_transaction_screen.dart';
+import 'package:pennywise/screens/home/home_screen.dart';
 import 'package:pennywise/screens/settings/settings_screen.dart';
 import 'package:pennywise/services/demo_data.dart';
 import 'package:pennywise/services/update_service.dart';
@@ -56,6 +57,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Smart insights'), findsOneWidget);
+    final homeScrollable = find.descendant(
+      of: find.byType(HomeScreen),
+      matching: find.byType(Scrollable),
+    ).first;
+    await tester.scrollUntilVisible(find.text('Last 7 days'), 200,
+        scrollable: homeScrollable);
     expect(find.text('Last 7 days'), findsOneWidget);
 
     await tester.tap(_nav('Analytics'));

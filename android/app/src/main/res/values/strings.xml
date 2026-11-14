@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PennyWise</string>
+    <string name="shortcut_add_expense_short">Add Expense</string>
+    <string name="shortcut_add_expense_long">Add an expense</string>
+    <string name="shortcut_add_income_short">Add Income</string>
+    <string name="shortcut_add_income_long">Add an income</string>
+    <string name="shortcut_add_note_short">Add Note</string>
+    <string name="shortcut_add_note_long">Add a reminder or note</string>
+</resources>

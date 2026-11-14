@@ -23,6 +23,7 @@ import '../notes/notes_screen.dart';
 import '../recurring/recurring_screen.dart';
 import 'manage_accounts_screen.dart';
 import 'manage_categories_screen.dart';
+import '../sms/sms_import_sheet.dart';
 
 /// Profile & settings: preferences, money, categories, data, privacy.
 class SettingsScreen extends StatelessWidget {
@@ -115,6 +116,12 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Recurring transactions',
                 value: '${store.recurring.length}',
                 onTap: () => RecurringScreen.open(context),
+              ),
+              _Tile(
+                icon: Icons.sms_outlined,
+                title: 'Bank SMS Assistant',
+                subtitle: 'Parse transaction SMS messages offline & on-device',
+                onTap: () => SmsImportSheet.show(context),
               ),
             ]),
             const SizedBox(height: 22),

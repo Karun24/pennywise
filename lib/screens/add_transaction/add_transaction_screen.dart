@@ -20,6 +20,7 @@ import '../../widgets/common.dart';
 import '../../widgets/dialogs.dart';
 import '../../widgets/segmented.dart';
 import '../settings/category_editor_sheet.dart';
+import '../sms/sms_import_sheet.dart';
 import 'smart_entry_card.dart';
 
 /// What happened on the add/edit screen, reported back to the caller.
@@ -32,24 +33,39 @@ class _ScreenResult {
 
 /// Add or edit an income/expense.
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key, this.existing, this.initialRepeat});
+  const AddTransactionScreen({
+    super.key,
+    this.existing,
+    this.initialRepeat,
+    this.initialType,
+  });
 
   final TransactionEntry? existing;
 
   /// Pre-selects a repeat frequency (used by "New recurring").
   final RepeatFrequency? initialRepeat;
 
+  /// Pre-selects a transaction type (e.g. from launcher shortcuts).
+  final TransactionType? initialType;
+
   /// Opens the screen and shows the outcome (and any budget alert) as a
   /// snack bar on the calling screen.
-  static Future<void> open(BuildContext context,
-      {TransactionEntry? existing, RepeatFrequency? initialRepeat}) async {
+  static Future<void> open(
+    BuildContext context, {
+    TransactionEntry? existing,
+    RepeatFrequency? initialRepeat,
+    TransactionType? initialType,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     final store = context.read<FinanceStore>();
     final result = await Navigator.of(context).push<_ScreenResult>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => AddTransactionScreen(
-            existing: existing, initialRepeat: initialRepeat),
+          existing: existing,
+          initialRepeat: initialRepeat,
+          initialType: initialType,
+        ),
       ),
     );
     if (result == null) return;
@@ -120,7 +136,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _toAccountId = e.toAccountId;
       _receiptPath = e.receiptPath;
     } else {
-      _type = TransactionType.expense;
+      _type = widget.initialType ?? TransactionType.expense;
       _date = DateTime.now();
     }
     _note.addListener(_autoCategorize);
@@ -446,7 +462,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             ],
                           ),
                         ),
-                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => SmsImportSheet.show(context),
+                            icon: const Icon(Icons.sms_outlined, size: 16),
+                            label: const Text('Import from Bank SMS'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
                     ],
                     PennySegmented<TransactionType>(
                       values: TransactionType.values,

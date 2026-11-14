@@ -25,6 +25,7 @@ import '../notes/note_editor_screen.dart';
 import '../notes/notes_screen.dart';
 import '../settings/account_editor_sheet.dart';
 import '../settings/manage_accounts_screen.dart';
+import '../sms/sms_import_sheet.dart';
 
 /// The dashboard: balance, this month, insights, charts, budgets, recent.
 class HomeScreen extends StatelessWidget {
@@ -116,6 +117,12 @@ class _Header extends StatelessWidget {
             backgroundColor: context.penny.accent,
             child: const Icon(Icons.sticky_note_2_rounded),
           ),
+        ),
+        const SizedBox(width: 4),
+        IconButton.filledTonal(
+          tooltip: 'Bank SMS Assistant',
+          onPressed: () => SmsImportSheet.show(context),
+          icon: const Icon(Icons.sms_outlined),
         ),
         const SizedBox(width: 4),
         IconButton.filledTonal(

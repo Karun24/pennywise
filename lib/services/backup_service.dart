@@ -93,8 +93,11 @@ class BackupService {
       }
 
       // Accounts were added in version 4; older backups use defaults.
+      var nextAccId = 1;
       final accounts = map['accounts'] == null
           ? AppDatabase.buildDefaultAccounts()
+              .map((a) => a.copyWith(id: nextAccId++))
+              .toList()
           : list('accounts').map(Account.fromMap).toList();
       final accountIds = <int>{};
       for (final a in accounts) {

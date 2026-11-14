@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pennywise/app.dart';
 import 'package:pennywise/repositories/in_memory_finance_repository.dart';
+import 'package:pennywise/screens/add_transaction/add_transaction_screen.dart';
+import 'package:pennywise/screens/settings/settings_screen.dart';
 import 'package:pennywise/services/demo_data.dart';
 import 'package:pennywise/services/update_service.dart';
 import 'package:pennywise/shell/penny_bottom_bar.dart';
@@ -21,7 +23,10 @@ Future<FinanceStore> _store({bool demo = false}) async {
 void _phoneSize(WidgetTester tester) {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.75;
-  addTearDown(tester.view.reset);
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
 }
 
 Finder _nav(String label) => find.descendant(
@@ -40,7 +45,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Total balance'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Welcome to PennyWise'), 100);
     expect(find.text('Welcome to PennyWise'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Explore with demo data'), 100);
     expect(find.text('Explore with demo data'), findsOneWidget);
   });
 
@@ -50,7 +57,9 @@ void main() {
     await tester.pumpWidget(PennyWiseApp(store: store));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(find.text('Smart insights'), 100);
     expect(find.text('Smart insights'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Last 7 days'), 100);
     expect(find.text('Last 7 days'), findsOneWidget);
 
     await tester.tap(_nav('Analytics'));
@@ -159,6 +168,7 @@ void main() {
     await tester.tap(find.text('New note'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'Lent money to Ravi');
+    await tester.scrollUntilVisible(find.text('Tomorrow 9 AM'), 100);
     await tester.tap(find.text('Tomorrow 9 AM'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save & set reminder'));
@@ -180,8 +190,12 @@ void main() {
 
     await tester.tap(_nav('Profile'));
     await tester.pumpAndSettle();
+    final settingsScrollable = find.descendant(
+      of: find.byType(SettingsScreen),
+      matching: find.byType(Scrollable),
+    );
     await tester.scrollUntilVisible(find.text('App lock'), 200,
-        scrollable: find.byType(Scrollable).first);
+        scrollable: settingsScrollable);
     expect(find.text('Daily reminder'), findsOneWidget);
     expect(find.text('App lock'), findsOneWidget);
 
@@ -189,8 +203,12 @@ void main() {
         of: find.byType(PennyBottomBar),
         matching: find.byIcon(Icons.add_rounded)));
     await tester.pumpAndSettle();
+    final addScrollable = find.descendant(
+      of: find.byType(AddTransactionScreen),
+      matching: find.byType(Scrollable),
+    );
     await tester.scrollUntilVisible(find.text('Monthly'), 200,
-        scrollable: find.byType(Scrollable).first);
+        scrollable: addScrollable);
     await tester.tap(find.text('Monthly'));
     await tester.pumpAndSettle();
     expect(find.text('Save monthly expense'), findsOneWidget);

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pennywise/database/default_categories.dart';
 import 'package:pennywise/models/account.dart';
@@ -204,11 +206,14 @@ void main() {
       await other.restore(decoded);
       expect(other.notes.single.body, 'Pay landlord');
 
-      // A version-1 backup has no "notes" or "accounts" section.
-      final v1 = BackupService.encode(s.snapshot())
-          .replaceFirst(RegExp(r'"version":\s*\d+'), '"version": 1');
-      final old = BackupService.decode(v1.replaceAll(
-          RegExp(r',\s*"notes": \[[\s\S]*\]\s*}\s*$'), '\n}'));
+      // A version-1 backup has no "notes", "recurring", "accounts", or "goals" section.
+      final jsonMap = jsonDecode(BackupService.encode(s.snapshot())) as Map<String, dynamic>;
+      jsonMap['version'] = 1;
+      jsonMap.remove('notes');
+      jsonMap.remove('accounts');
+      jsonMap.remove('recurring');
+      jsonMap.remove('goals');
+      final old = BackupService.decode(jsonEncode(jsonMap));
       expect(old.notes, isEmpty);
       expect(old.accounts, isEmpty);
     });

@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../models/transaction_entry.dart';
@@ -7,7 +5,6 @@ import '../../screens/add_transaction/add_transaction_screen.dart';
 import '../../theme/theme_ext.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/money.dart';
-import '../common.dart';
 import '../transaction_tile.dart';
 
 /// Interactive monthly calendar heatmap visualizing daily spending intensity.

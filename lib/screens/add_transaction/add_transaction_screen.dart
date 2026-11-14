@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/account.dart';
 import '../../models/category.dart';
 import '../../models/recurring_rule.dart';
 import '../../models/transaction_entry.dart';

@@ -253,7 +253,7 @@ class PdfStatementService {
                       ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
-                        child: pw.Text(fmt(ct.amountMinor),
+                        child: pw.Text(fmt(ct.totalMinor),
                             style: const pw.TextStyle(fontSize: 9),
                             textAlign: pw.TextAlign.right),
                       ),

@@ -10,6 +10,7 @@ import '../../state/finance_store.dart';
 import '../../theme/theme_ext.dart';
 import '../../utils/money.dart';
 import '../../widgets/common.dart';
+import '../../widgets/dialogs.dart';
 import '../add_transaction/add_transaction_screen.dart';
 
 /// Modal sheet for parsing bank/UPI SMS messages into transactions on-device.
@@ -193,7 +194,7 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
 
     return Container(
       decoration: BoxDecoration(
-        color: context.penny.surfaceLow,
+        color: context.colors.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -259,7 +260,7 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                 hintText:
                     'Paste bank or UPI SMS message here (e.g. "Debited by Rs 450 to Zomato...")',
                 hintStyle: context.text.bodySmall?.copyWith(
-                  color: context.penny.subtleText,
+                  color: context.penny.textMuted,
                 ),
                 filled: true,
                 fillColor: context.penny.surfaceHigh,
@@ -322,7 +323,7 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                             Text(
                               'DETECTED AMOUNT',
                               style: context.text.labelSmall?.copyWith(
-                                color: context.penny.subtleText,
+                                color: context.penny.textMuted,
                                 letterSpacing: 1,
                               ),
                             ),
@@ -366,7 +367,7 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                     Text(
                       'DESCRIPTION / PAYEE',
                       style: context.text.labelSmall?.copyWith(
-                        color: context.penny.subtleText,
+                        color: context.penny.textMuted,
                         letterSpacing: 1,
                       ),
                     ),
@@ -379,7 +380,7 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
                         filled: true,
-                        fillColor: context.penny.surfaceLow,
+                        fillColor: context.colors.surface,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: context.penny.border),
@@ -392,7 +393,7 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                     Text(
                       'ACCOUNT',
                       style: context.text.labelSmall?.copyWith(
-                        color: context.penny.subtleText,
+                        color: context.penny.textMuted,
                         letterSpacing: 1,
                       ),
                     ),
@@ -420,7 +421,7 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                     Text(
                       'CATEGORY',
                       style: context.text.labelSmall?.copyWith(
-                        color: context.penny.subtleText,
+                        color: context.penny.textMuted,
                         letterSpacing: 1,
                       ),
                     ),
@@ -455,13 +456,13 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: context.penny.surfaceLow,
+                                color: context.colors.surface,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 'Remaining Bal: ${store.format(parsed.balanceMinor!)}',
                                 style: context.text.bodySmall?.copyWith(
-                                  color: context.penny.subtleText,
+                                  color: context.penny.textMuted,
                                 ),
                               ),
                             ),
@@ -470,13 +471,13 @@ class _SmsImportSheetState extends State<SmsImportSheet> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: context.penny.surfaceLow,
+                                color: context.colors.surface,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 'Ref: ${parsed.referenceId}',
                                 style: context.text.bodySmall?.copyWith(
-                                  color: context.penny.subtleText,
+                                  color: context.penny.textMuted,
                                 ),
                               ),
                             ),

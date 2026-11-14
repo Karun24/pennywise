@@ -12,12 +12,9 @@ class ReceiptService {
   /// in the app's local receipts directory. Returns the absolute file path,
   /// or null if the user cancelled.
   Future<String?> pickAndSaveReceipt() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-    );
-    if (result == null || result.files.isEmpty) return null;
-    final path = result.files.single.path;
+    final picked = await FilePicker.pickFile(type: FileType.image);
+    if (picked == null) return null;
+    final path = picked.path;
     if (path == null) return null;
 
     final source = File(path);

@@ -103,7 +103,7 @@ class TransactionTile extends StatelessWidget {
                         Icon(
                           Icons.receipt_long_rounded,
                           size: 14,
-                          color: context.penny.subtleText,
+                          color: context.penny.textMuted,
                         ),
                       ],
                     ],

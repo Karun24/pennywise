@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_settings.dart';
+import '../../models/backup_data.dart';
 import '../../services/app_lock_service.dart';
 import '../../services/backup_file_service.dart';
 import '../../services/backup_service.dart';

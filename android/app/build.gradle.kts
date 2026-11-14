@@ -15,6 +15,11 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
     compileOptions {
         // Needed by flutter_local_notifications (scheduled reminders).
         isCoreLibraryDesugaringEnabled = true

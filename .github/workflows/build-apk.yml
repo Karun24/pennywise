@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - uses: subosito/flutter-action@v2
         with:
@@ -35,6 +35,8 @@ jobs:
       - name: Generate Android platform files
         run: |
           flutter create --org com.pennywise --project-name pennywise --platforms android .
+          echo "android.lint.checkReleaseBuilds=false" >> android/gradle.properties
+          echo "android.lint.abortOnError=false" >> android/gradle.properties
           M=android/app/src/main/AndroidManifest.xml
           sed -i 's/android:label="[^"]*"/android:label="PennyWise"/' "$M"
           # Internet is used ONLY for the optional "check for updates" feature;

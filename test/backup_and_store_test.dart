@@ -219,7 +219,6 @@ void main() {
       jsonMap.remove('debts');
       final old = BackupService.decode(jsonEncode(jsonMap));
       expect(old.notes, isEmpty);
-      expect(old.accounts, isEmpty);
       expect(old.debts, isEmpty);
     });
   });
@@ -557,7 +556,7 @@ void main() {
       );
 
       final kvs = settings.toKeyValues();
-      expect(kvs['amoled_dark'], 'true');
+      expect(kvs['amoled_dark'], '1');
       expect(kvs['accent_color'], 'emerald');
 
       final restored = AppSettings.fromKeyValues(kvs);

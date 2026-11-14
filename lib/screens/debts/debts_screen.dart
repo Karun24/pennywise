@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/account.dart';
 import '../../models/debt_entry.dart';
 import '../../state/finance_store.dart';
 import '../../theme/theme_ext.dart';
@@ -87,7 +86,7 @@ class _DebtsScreenState extends State<DebtsScreen>
               if (recordTx && store.accounts.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
-                  value: selectedAcc,
+                  initialValue: selectedAcc,
                   decoration: const InputDecoration(
                     labelText: 'Account',
                     isDense: true,

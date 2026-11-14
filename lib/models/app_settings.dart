@@ -72,6 +72,10 @@ class AppSettings {
   /// Selected accent color palette.
   final AppAccentColor accentColor;
 
+  /// Cache key for theme rebuilding.
+  int get themeKey =>
+      theme.index * 100 + (amoledDark ? 10 : 0) + accentColor.index;
+
   static const keyTheme = 'theme';
   static const keyCurrency = 'currency';
   static const keyMonthlyBudget = 'monthly_budget_minor';

@@ -51,33 +51,32 @@ class PennyWiseApp extends StatelessWidget {
         Provider<AppLockAuthenticator>(
             create: (_) => authenticator ?? DeviceAppLockAuthenticator()),
       ],
-      child: Selector<FinanceStore, (AppThemePreference, bool, AppAccentColor)>(
-        selector: (_, s) => (
-          s.settings.theme,
-          s.settings.amoledDark,
-          s.settings.accentColor,
-        ),
-        builder: (context, themeData, _) => MaterialApp(
-          title: 'PennyWise',
-          navigatorKey: navigatorKey,
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(accent: themeData.$3),
-          darkTheme: AppTheme.dark(
-            amoled: themeData.$2,
-            accent: themeData.$3,
-          ),
-          themeMode: _mode(themeData.$1),
-          // Keep layouts intact with very large accessibility font sizes.
-          builder: (context, child) {
-            final mq = MediaQuery.of(context);
-            return MediaQuery(
-              data: mq.copyWith(
-                  textScaler: mq.textScaler.clamp(maxScaleFactor: 1.35)),
-              child: AppLockGate(child: child ?? const SizedBox.shrink()),
-            );
-          },
-          home: const AppShell(),
-        ),
+      child: Selector<FinanceStore, int>(
+        selector: (_, s) => s.settings.themeKey,
+        builder: (context, _, child) {
+          final s = store.settings;
+          return MaterialApp(
+            title: 'PennyWise',
+            navigatorKey: navigatorKey,
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(accent: s.accentColor),
+            darkTheme: AppTheme.dark(
+              amoled: s.amoledDark,
+              accent: s.accentColor,
+            ),
+            themeMode: _mode(s.theme),
+            // Keep layouts intact with very large accessibility font sizes.
+            builder: (context, child) {
+              final mq = MediaQuery.of(context);
+              return MediaQuery(
+                data: mq.copyWith(
+                    textScaler: mq.textScaler.clamp(maxScaleFactor: 1.35)),
+                child: AppLockGate(child: child ?? const SizedBox.shrink()),
+              );
+            },
+            home: const AppShell(),
+          );
+        },
       ),
     );
   }

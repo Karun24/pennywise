@@ -17,6 +17,19 @@ class AppTheme {
     bool amoled = false,
     AppAccentColor accent = AppAccentColor.indigo,
   }) {
+    if (!amoled && accent == AppAccentColor.indigo) {
+      return _build(
+        brightness: Brightness.dark,
+        background: const Color(0xFF0A0F1F),
+        surface: const Color(0xFF121935),
+        surfaceHigh: const Color(0xFF1A2244),
+        onSurface: const Color(0xFFF2F3FF),
+        primary: const Color(0xFF8B6CFF),
+        secondary: const Color(0xFF2DD4BF),
+        error: const Color(0xFFFF7A90),
+        penny: PennyColors.dark,
+      );
+    }
     final primary = Color(accent.primaryValue);
     final accentColor = Color(accent.lightValue);
     final gradient = [Color(accent.darkValue), Color(accent.lightValue)];
@@ -41,6 +54,19 @@ class AppTheme {
   static ThemeData light({
     AppAccentColor accent = AppAccentColor.indigo,
   }) {
+    if (accent == AppAccentColor.indigo) {
+      return _build(
+        brightness: Brightness.light,
+        background: const Color(0xFFF5F6FB),
+        surface: Colors.white,
+        surfaceHigh: const Color(0xFFF0F1F8),
+        onSurface: const Color(0xFF0E1330),
+        primary: const Color(0xFF6246F5),
+        secondary: const Color(0xFF0D9488),
+        error: const Color(0xFFE5486A),
+        penny: PennyColors.light,
+      );
+    }
     final primary = Color(accent.darkValue);
     final accentColor = Color(accent.primaryValue);
     final gradient = [Color(accent.darkValue), Color(accent.lightValue)];

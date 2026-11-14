@@ -1,0 +1,17 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    todo: ignore
+
+linter:
+  rules:
+    # Keep the signal-to-noise ratio high; these are stylistic only.
+    prefer_const_constructors: false
+    prefer_const_literals_to_create_immutables: false
+    prefer_const_constructors_in_immutables: false
+    prefer_const_declarations: false
+    avoid_print: true
+    prefer_single_quotes: true
+    always_declare_return_types: true
+    unawaited_futures: false

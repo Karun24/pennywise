@@ -1,0 +1,57 @@
+name: pennywise
+description: "PennyWise - a private, offline, smart personal expense tracker."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  # Flutter 3.38+ (Dart 3.10+) is required by the current file_picker.
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management (simple, official-recommended, well maintained).
+  provider: ^6.1.5
+  # Local SQLite storage for Android & iOS.
+  sqflite: ^2.4.2
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  # Number / date formatting (Indian digit grouping for INR).
+  intl: ^0.20.2
+  # Backup export (share sheet) and import (system file picker).
+  # Neither needs storage permissions on Android.
+  # The SharePlus/ShareParams API is identical across 11-13; pub picks the
+  # newest one your Flutter version supports.
+  share_plus: ">=11.0.0 <14.0.0"
+  file_picker: ^13.0.0
+  # Opens the update download link in the browser.
+  url_launcher: ^6.3.2
+  # Reminder notifications for notes (scheduled on the device, no server).
+  # Pinned to 22.x: 23.x needs Android Gradle Plugin 9.1.1 / compileSdk 37,
+  # newer than the current Flutter project template.
+  flutter_local_notifications: ^22.3.3
+  timezone: ^0.11.0
+  # App lock with fingerprint / face / phone PIN (checked by the phone).
+  local_auth: ^3.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

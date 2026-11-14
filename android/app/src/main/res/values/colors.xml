@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Midnight navy shown while the app starts. -->
+    <color name="pennywise_splash">#FF0A0F1F</color>
+</resources>

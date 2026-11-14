@@ -9,15 +9,24 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/backup_data.dart';
 import 'backup_service.dart';
+import 'crypto_backup_service.dart';
 import 'csv_import_service.dart';
 
-/// A file chosen for import: a full JSON backup or a CSV export.
+/// A file chosen for import: a full JSON backup, an encrypted backup, or a CSV export.
 class ImportFile {
-  const ImportFile.backup(BackupData this.backup) : csv = null;
-  const ImportFile.csv(List<CsvTransaction> this.csv) : backup = null;
+  const ImportFile.backup(BackupData this.backup)
+      : csv = null,
+        encryptedText = null;
+  const ImportFile.csv(List<CsvTransaction> this.csv)
+      : backup = null,
+        encryptedText = null;
+  const ImportFile.encrypted(String this.encryptedText)
+      : backup = null,
+        csv = null;
 
   final BackupData? backup;
   final List<CsvTransaction>? csv;
+  final String? encryptedText;
 }
 
 /// Platform side of backups: writes files and hands them to the system
@@ -59,6 +68,30 @@ class BackupFileService {
     ));
   }
 
+  Future<void> shareEncryptedBackup(
+      BuildContext context, BackupData data, String password) async {
+    final origin = _origin(context);
+    final json = BackupService.encode(data);
+    final encrypted = const CryptoBackupService().encrypt(json, password);
+    final file = await _writeTemp(
+        'pennywise-backup-${_stamp(DateTime.now())}.enc', encrypted);
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile(file.path, mimeType: 'application/octet-stream')],
+      subject: 'PennyWise encrypted backup',
+      sharePositionOrigin: origin,
+    ));
+  }
+
+  Future<void> shareFile(BuildContext context, File file,
+      {required String mimeType, required String subject}) async {
+    final origin = _origin(context);
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile(file.path, mimeType: mimeType)],
+      subject: subject,
+      sharePositionOrigin: origin,
+    ));
+  }
+
   Future<void> shareCsv(BuildContext context, String csv) async {
     final origin = _origin(context);
     final file = await _writeTemp(
@@ -92,6 +125,9 @@ class BackupFileService {
       throw const BackupFormatException('This is not a PennyWise backup file.');
     }
     if (text.trimLeft().startsWith('{')) {
+      if (CryptoBackupService.isEncrypted(text)) {
+        return ImportFile.encrypted(text);
+      }
       return ImportFile.backup(BackupService.decode(text));
     }
     if (CsvImportService.looksLikeCsv(text)) {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +9,7 @@ import '../../models/category.dart';
 import '../../models/recurring_rule.dart';
 import '../../models/transaction_entry.dart';
 import '../../services/budget_service.dart';
+import '../../services/receipt_service.dart';
 import '../../services/smart/transaction_parser.dart';
 import '../../state/finance_store.dart';
 import '../../theme/theme_ext.dart';
@@ -86,6 +89,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   PaymentMethod _payment = PaymentMethod.upi;
   int? _accountId;
   int? _toAccountId;
+  String? _receiptPath;
 
   /// Null = does not repeat.
   late RepeatFrequency? _repeat = widget.initialRepeat;
@@ -114,6 +118,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _payment = e.paymentMethod;
       _accountId = e.accountId;
       _toAccountId = e.toAccountId;
+      _receiptPath = e.receiptPath;
     } else {
       _type = TransactionType.expense;
       _date = DateTime.now();
@@ -282,6 +287,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       accountId: _accountId,
       toAccountId: isTransfer ? _toAccountId : null,
       tag: _tag.text.trim().replaceAll('#', ''),
+      receiptPath: _receiptPath,
     );
     try {
       final repeat = _repeat;
@@ -324,6 +330,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return 'You have used ${(s.ratio * 100).round()}% of your $name.';
   }
 
+  Future<void> _pickReceipt() async {
+    final path = await const ReceiptService().pickAndSaveReceipt();
+    if (path != null && mounted) {
+      setState(() => _receiptPath = path);
+    }
+  }
+
+  void _removeReceipt() {
+    setState(() => _receiptPath = null);
+  }
+
   Future<void> _delete() async {
     final store = context.read<FinanceStore>();
     final navigator = Navigator.of(context);
@@ -337,6 +354,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (!ok) return;
     try {
       final e = widget.existing!;
+      if (e.hasReceipt) {
+        await const ReceiptService().deleteReceipt(e.receiptPath);
+      }
       await store.deleteTransaction(e);
       navigator.pop(_ScreenResult('Transaction deleted', deleted: e));
     } on StoreException catch (e) {
@@ -637,6 +657,68 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 18),
+                    _Label('Receipt / Bill (optional)'),
+                    if (_receiptPath == null)
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                        onPressed: _pickReceipt,
+                        icon: const Icon(Icons.receipt_long_rounded),
+                        label: const Text('Attach receipt or invoice photo'),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: context.penny.surfaceHigh,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: context.penny.border),
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(_receiptPath!),
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.receipt_rounded,
+                                    size: 32),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Receipt attached',
+                                      style: context.text.titleSmall),
+                                  const SizedBox(height: 2),
+                                  Text('Tap to replace',
+                                      style: context.text.bodySmall),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Replace receipt',
+                              icon: const Icon(Icons.refresh_rounded, size: 20),
+                              onPressed: _pickReceipt,
+                            ),
+                            IconButton(
+                              tooltip: 'Remove receipt',
+                              icon: Icon(Icons.close_rounded,
+                                  color: context.penny.expense, size: 20),
+                              onPressed: _removeReceipt,
+                            ),
+                          ],
+                        ),
+                      ),
                     if (_type != TransactionType.transfer) ...[
                       const SizedBox(height: 18),
                       _Label('Payment method'),

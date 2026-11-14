@@ -14,7 +14,7 @@ class AppDatabase {
   static const fileName = 'pennywise.db';
 
   /// Bump this and add a step in [_onUpgrade] whenever the schema changes.
-  static const schemaVersion = 5;
+  static const schemaVersion = 6;
 
   static const tCategories = 'categories';
   static const tTransactions = 'transactions';
@@ -73,7 +73,8 @@ class AppDatabase {
           REFERENCES $tAccounts(id) ON DELETE SET NULL,
         to_account_id INTEGER
           REFERENCES $tAccounts(id) ON DELETE SET NULL,
-        tag TEXT NOT NULL DEFAULT ''
+        tag TEXT NOT NULL DEFAULT '',
+        receipt_path TEXT
       )
     ''');
     await db.execute(
@@ -222,6 +223,9 @@ class AppDatabase {
     }
     if (oldVersion < 5) {
       await _createGoals(db);
+    }
+    if (oldVersion < 6) {
+      await db.execute('ALTER TABLE $tTransactions ADD COLUMN receipt_path TEXT');
     }
   }
 

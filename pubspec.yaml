@@ -35,6 +35,11 @@ dependencies:
   timezone: ^0.11.0
   # App lock with fingerprint / face / phone PIN (checked by the phone).
   local_auth: ^3.0.2
+  # Offline PDF statement generation (pure Dart).
+  pdf: ^3.11.1
+  # Encryption and hashing for password-protected backups.
+  crypto: ^3.0.6
+  encrypt: ^5.0.3
 
 dev_dependencies:
   flutter_test:

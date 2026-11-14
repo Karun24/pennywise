@@ -5,7 +5,9 @@ import '../../models/app_settings.dart';
 import '../../services/app_lock_service.dart';
 import '../../services/backup_file_service.dart';
 import '../../services/backup_service.dart';
+import '../../services/crypto_backup_service.dart';
 import '../../services/demo_data.dart';
+import '../../services/pdf_statement_service.dart';
 import '../../services/update_service.dart';
 import '../../state/finance_store.dart';
 import '../../state/update_controller.dart';
@@ -122,9 +124,15 @@ class SettingsScreen extends StatelessWidget {
             const _GroupTitle('Your data'),
             _SettingsGroup(children: [
               _Tile(
+                icon: Icons.picture_as_pdf_rounded,
+                title: 'Export monthly statement (PDF)',
+                subtitle: 'Printable financial report with breakdown and itemized ledger',
+                onTap: () => _exportPdfStatement(context),
+              ),
+              _Tile(
                 icon: Icons.cloud_upload_rounded,
-                title: 'Export backup (.json)',
-                subtitle: 'Full backup of everything. Use this to restore',
+                title: 'Export backup (.json / .enc)',
+                subtitle: 'Full backup of everything. Supports password protection',
                 onTap: () => _exportBackup(context),
               ),
               _Tile(
@@ -276,11 +284,133 @@ class SettingsScreen extends StatelessWidget {
         store.settings.copyWith(startingBalanceMinor: result.amountMinor ?? 0));
   }
 
-  Future<void> _exportBackup(BuildContext context) async {
+  Future<String?> _promptPassword(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final controller = TextEditingController();
+    var obscure = true;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: Text(title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: ctx.text.bodySmall),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  hintText: 'Enter password',
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
+                    onPressed: () => setDialog(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final pwd = controller.text.trim();
+                if (pwd.isEmpty) return;
+                Navigator.of(ctx).pop(pwd);
+              },
+              child: Text(confirmLabel),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportPdfStatement(BuildContext context) async {
     final store = context.read<FinanceStore>();
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await _files.shareBackup(context, store.snapshot());
+      final file = await const PdfStatementService().generateMonthlyStatement(
+        month: store.now,
+        transactions: store.transactions,
+        categories: store.categories,
+        accounts: store.accounts,
+        currency: store.currency,
+      );
+      if (!context.mounted) return;
+      await _files.shareFile(
+        context,
+        file,
+        mimeType: 'application/pdf',
+        subject: 'PennyWise Statement - ${DateUtilsX.monthYear(store.now)}',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+          pennySnack('Could not export PDF statement. $e', error: true));
+    }
+  }
+
+  Future<void> _exportBackup(BuildContext context) async {
+    final store = context.read<FinanceStore>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Choose backup format', style: ctx.text.titleMedium),
+            ),
+            ListTile(
+              leading: const Icon(Icons.file_present_rounded),
+              title: const Text('Standard backup (.json)'),
+              subtitle: const Text('Unencrypted, easy to inspect'),
+              onTap: () => Navigator.of(ctx).pop('plain'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.lock_outline_rounded),
+              title: const Text('Password-protected backup (.enc)'),
+              subtitle: const Text('AES-256 encrypted with your password'),
+              onTap: () => Navigator.of(ctx).pop('encrypted'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (mode == null || !context.mounted) return;
+
+    try {
+      if (mode == 'plain') {
+        await _files.shareBackup(context, store.snapshot());
+      } else {
+        final pwd = await _promptPassword(
+          context,
+          title: 'Encrypt backup',
+          message:
+              'Choose a password to secure this backup. You will need it to restore your data.',
+          confirmLabel: 'Encrypt & Export',
+        );
+        if (pwd == null || !context.mounted) return;
+        await _files.shareEncryptedBackup(context, store.snapshot(), pwd);
+      }
     } catch (e) {
       messenger.showSnackBar(
           pennySnack('Could not export the backup. $e', error: true));
@@ -332,7 +462,24 @@ class SettingsScreen extends StatelessWidget {
             '${result.skipped > 0 ? ' (${result.skipped} already there)' : ''}.'));
         return;
       }
-      final data = file.backup!;
+
+      final BackupData data;
+      if (file.encryptedText != null) {
+        final pwd = await _promptPassword(
+          context,
+          title: 'Encrypted backup',
+          message:
+              'This backup is password-protected. Enter the password to unlock.',
+          confirmLabel: 'Unlock & Restore',
+        );
+        if (pwd == null || !context.mounted) return;
+        final decryptedJson =
+            const CryptoBackupService().decrypt(file.encryptedText!, pwd);
+        data = BackupService.decode(decryptedJson);
+      } else {
+        data = file.backup!;
+      }
+
       final when = data.exportedAt == null
           ? ''
           : ' from ${DateUtilsX.dayMonthYear(data.exportedAt!)}';
@@ -349,6 +496,8 @@ class SettingsScreen extends StatelessWidget {
       if (!ok) return;
       await store.restore(data);
       messenger.showSnackBar(pennySnack('Backup restored'));
+    } on CryptoBackupException catch (e) {
+      messenger.showSnackBar(pennySnack(e.message, error: true));
     } on BackupFormatException catch (e) {
       messenger.showSnackBar(pennySnack(e.message, error: true));
     } on StoreException catch (e) {

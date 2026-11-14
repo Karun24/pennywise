@@ -7,6 +7,7 @@ import 'package:pennywise/models/note.dart';
 import 'package:pennywise/models/transaction_entry.dart';
 import 'package:pennywise/repositories/in_memory_finance_repository.dart';
 import 'package:pennywise/services/backup_service.dart';
+import 'package:pennywise/services/crypto_backup_service.dart';
 import 'package:pennywise/services/reminder_service.dart';
 import 'package:pennywise/state/finance_store.dart';
 import 'package:pennywise/utils/money.dart';
@@ -355,6 +356,69 @@ void main() {
       await other.restore(decoded);
       expect(other.goals.single.name, 'MacBook Pro');
       expect(other.goals.single.savedMinor, 5000000);
+    });
+  });
+
+  group('CryptoBackupService', () {
+    test('encrypt and decrypt roundtrip matches original data', () {
+      const crypto = CryptoBackupService();
+      const original = '{"version": 5, "hello": "world"}';
+      const password = 'my-secret-password-123';
+
+      final encrypted = crypto.encrypt(original, password);
+      expect(CryptoBackupService.isEncrypted(encrypted), isTrue);
+      expect(encrypted.contains('pennywise-encrypted-backup'), isTrue);
+
+      final decrypted = crypto.decrypt(encrypted, password);
+      expect(decrypted, original);
+    });
+
+    test('decrypt with wrong password throws CryptoBackupException', () {
+      const crypto = CryptoBackupService();
+      const original = '{"test": true}';
+      final encrypted = crypto.encrypt(original, 'correct-pass');
+
+      expect(
+        () => crypto.decrypt(encrypted, 'wrong-pass'),
+        throwsA(isA<CryptoBackupException>()),
+      );
+    });
+
+    test('encrypt with empty password throws CryptoBackupException', () {
+      const crypto = CryptoBackupService();
+      expect(
+        () => crypto.encrypt('{}', '   '),
+        throwsA(isA<CryptoBackupException>()),
+      );
+    });
+  });
+
+  group('TransactionEntry receipt support', () {
+    test('receiptPath is copied and serialized properly', () {
+      final entry = TransactionEntry(
+        type: TransactionType.expense,
+        amountMinor: 5000,
+        categoryId: 1,
+        note: 'Groceries with receipt',
+        date: now,
+        receiptPath: '/app/receipts/bill_123.jpg',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      expect(entry.hasReceipt, isTrue);
+      expect(entry.receiptPath, '/app/receipts/bill_123.jpg');
+
+      final map = entry.toMap();
+      expect(map['receipt_path'], '/app/receipts/bill_123.jpg');
+
+      final restored = TransactionEntry.fromMap(map);
+      expect(restored.hasReceipt, isTrue);
+      expect(restored.receiptPath, '/app/receipts/bill_123.jpg');
+
+      final cleared = entry.copyWith(clearReceipt: true);
+      expect(cleared.hasReceipt, isFalse);
+      expect(cleared.receiptPath, isNull);
     });
   });
 }

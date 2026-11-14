@@ -52,6 +52,7 @@ class TransactionEntry {
     this.accountId,
     this.toAccountId,
     this.tag = '',
+    this.receiptPath,
   });
 
   /// Null until the transaction has been stored.
@@ -78,6 +79,11 @@ class TransactionEntry {
 
   /// Optional event or trip tag (e.g. 'GoaTrip', 'Diwali').
   final String tag;
+
+  /// Optional local file path or relative filename to an attached bill / receipt image.
+  final String? receiptPath;
+
+  bool get hasReceipt => receiptPath != null && receiptPath!.isNotEmpty;
 
   bool get isRecurring => recurringId != null;
 
@@ -119,6 +125,8 @@ class TransactionEntry {
     int? accountId,
     int? toAccountId,
     String? tag,
+    String? receiptPath,
+    bool clearReceipt = false,
   }) {
     return TransactionEntry(
       id: id ?? this.id,
@@ -134,6 +142,8 @@ class TransactionEntry {
       accountId: accountId ?? this.accountId,
       toAccountId: toAccountId ?? this.toAccountId,
       tag: tag ?? this.tag,
+      receiptPath:
+          clearReceipt ? null : (receiptPath ?? this.receiptPath),
     );
   }
 
@@ -151,6 +161,7 @@ class TransactionEntry {
         if (accountId != null) 'account_id': accountId,
         if (toAccountId != null) 'to_account_id': toAccountId,
         if (tag.isNotEmpty) 'tag': tag,
+        if (receiptPath != null) 'receipt_path': receiptPath,
       };
 
   factory TransactionEntry.fromMap(Map<String, Object?> map) {
@@ -171,6 +182,7 @@ class TransactionEntry {
       accountId: (map['account_id'] as num?)?.toInt(),
       toAccountId: (map['to_account_id'] as num?)?.toInt(),
       tag: (map['tag'] as String?) ?? '',
+      receiptPath: map['receipt_path'] as String?,
     );
   }
 

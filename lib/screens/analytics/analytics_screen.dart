@@ -8,6 +8,7 @@ import '../../theme/theme_ext.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/money.dart';
 import '../../widgets/charts/bar_chart.dart';
+import '../../widgets/charts/calendar_heatmap.dart';
 import '../../widgets/charts/donut_chart.dart';
 import '../../widgets/charts/line_chart.dart';
 import '../../widgets/common.dart';
@@ -146,6 +147,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               if (_period == _Period.month) ...[
                 const SizedBox(height: 16),
                 _CumulativeCard(month: range.start, now: now),
+                const SizedBox(height: 16),
+                _MonthlyHeatmapCard(month: range.start, now: now),
               ],
               if (_period != _Period.week) ...[
                 const SizedBox(height: 16),
@@ -422,6 +425,37 @@ class _CumulativeCard extends StatelessWidget {
             ],
             formatValue: (v) => Money.format(v, c),
             formatAxis: (v) => Money.compact(v, c),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthlyHeatmapCard extends StatelessWidget {
+  const _MonthlyHeatmapCard({required this.month, required this.now});
+
+  final DateTime month;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<FinanceStore>();
+    return PennyCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: 'Spending calendar',
+            subtitle:
+                'Daily spending intensity across ${DateUtilsX.monthYear(month)}',
+          ),
+          const SizedBox(height: 12),
+          CalendarHeatmap(
+            month: month,
+            now: now,
+            transactions: store.transactions,
+            currency: store.currency,
           ),
         ],
       ),

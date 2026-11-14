@@ -14,7 +14,7 @@ class AppDatabase {
   static const fileName = 'pennywise.db';
 
   /// Bump this and add a step in [_onUpgrade] whenever the schema changes.
-  static const schemaVersion = 4;
+  static const schemaVersion = 5;
 
   static const tCategories = 'categories';
   static const tTransactions = 'transactions';
@@ -23,6 +23,7 @@ class AppDatabase {
   static const tNotes = 'notes';
   static const tRecurring = 'recurring';
   static const tAccounts = 'accounts';
+  static const tGoals = 'goals';
 
   static Future<Database> open({String? overridePath}) async {
     final path = overridePath ?? p.join(await getDatabasesPath(), fileName);
@@ -96,6 +97,26 @@ class AppDatabase {
     ''');
     await _createNotes(db);
     await _createRecurring(db);
+    await _createGoals(db);
+  }
+
+  /// Added in schema version 5.
+  static Future<void> _createGoals(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tGoals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL COLLATE NOCASE,
+        target_minor INTEGER NOT NULL CHECK (target_minor > 0),
+        saved_minor INTEGER NOT NULL DEFAULT 0,
+        target_date INTEGER,
+        color INTEGER NOT NULL,
+        icon_key TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        completed INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
   }
 
   /// Added in schema version 4.
@@ -198,6 +219,9 @@ class AppDatabase {
           'CREATE INDEX idx_tx_category ON $tTransactions(category_id)');
       await db.execute(
           'CREATE INDEX idx_tx_account ON $tTransactions(account_id)');
+    }
+    if (oldVersion < 5) {
+      await _createGoals(db);
     }
   }
 

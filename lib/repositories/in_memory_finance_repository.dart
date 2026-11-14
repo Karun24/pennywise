@@ -3,6 +3,7 @@ import '../database/default_categories.dart';
 import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/goal.dart';
 import '../models/note.dart';
 import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
@@ -17,11 +18,13 @@ class InMemoryFinanceRepository implements FinanceRepository {
   final Map<String, String> _settings = {};
   final List<Note> _notes = [];
   final List<RecurringRule> _recurring = [];
+  final List<Goal> _goals = [];
   int _nextAccountId = 1;
   int _nextRecurringId = 1;
   int _nextCategoryId = 1;
   int _nextTransactionId = 1;
   int _nextNoteId = 1;
+  int _nextGoalId = 1;
 
   @override
   Future<void> init() async {
@@ -242,6 +245,36 @@ class InMemoryFinanceRepository implements FinanceRepository {
   }
 
   @override
+  Future<List<Goal>> getGoals() async {
+    final list = List<Goal>.of(_goals)
+      ..sort((a, b) {
+        if (a.completed != b.completed) {
+          return a.completed ? 1 : -1;
+        }
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    return list;
+  }
+
+  @override
+  Future<Goal> insertGoal(Goal goal) async {
+    final stored = goal.copyWith(id: _nextGoalId++);
+    _goals.add(stored);
+    return stored;
+  }
+
+  @override
+  Future<void> updateGoal(Goal goal) async {
+    final i = _goals.indexWhere((g) => g.id == goal.id);
+    if (i >= 0) _goals[i] = goal;
+  }
+
+  @override
+  Future<void> deleteGoal(int id) async {
+    _goals.removeWhere((g) => g.id == id);
+  }
+
+  @override
   Future<Map<String, String>> getSettings() async => Map.of(_settings);
 
   @override
@@ -274,6 +307,9 @@ class InMemoryFinanceRepository implements FinanceRepository {
     _recurring
       ..clear()
       ..addAll(data.recurring);
+    _goals
+      ..clear()
+      ..addAll(data.goals);
     int maxId(Iterable<int?> ids) =>
         ids.fold<int>(0, (m, id) => (id ?? 0) > m ? id! : m);
     _nextAccountId = maxId(_accounts.map((a) => a.id)) + 1;
@@ -281,6 +317,7 @@ class InMemoryFinanceRepository implements FinanceRepository {
     _nextTransactionId = maxId(_transactions.map((t) => t.id)) + 1;
     _nextNoteId = maxId(_notes.map((n) => n.id)) + 1;
     _nextRecurringId = maxId(_recurring.map((r) => r.id)) + 1;
+    _nextGoalId = maxId(_goals.map((g) => g.id)) + 1;
   }
 
   @override
@@ -292,11 +329,13 @@ class InMemoryFinanceRepository implements FinanceRepository {
     _settings.clear();
     _notes.clear();
     _recurring.clear();
+    _goals.clear();
     _nextAccountId = 1;
     _nextRecurringId = 1;
     _nextCategoryId = 1;
     _nextTransactionId = 1;
     _nextNoteId = 1;
+    _nextGoalId = 1;
     _seed();
   }
 }

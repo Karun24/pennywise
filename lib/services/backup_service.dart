@@ -4,6 +4,7 @@ import '../database/app_database.dart';
 import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/goal.dart';
 import '../models/note.dart';
 import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
@@ -23,8 +24,8 @@ class BackupService {
 
   static const formatId = 'pennywise-backup';
   /// 1 = transactions/categories/budgets/settings, 2 = + notes,
-  /// 3 = + recurring rules, 4 = + accounts.
-  static const formatVersion = 4;
+  /// 3 = + recurring rules, 4 = + accounts, 5 = + goals.
+  static const formatVersion = 5;
 
   static String encode(BackupData data) {
     final json = {
@@ -38,6 +39,7 @@ class BackupService {
       'settings': data.settings,
       'notes': data.notes.map((n) => n.toMap()).toList(),
       'recurring': data.recurring.map((r) => r.toMap()).toList(),
+      'goals': data.goals.map((g) => g.toMap()).toList(),
     };
     return const JsonEncoder.withIndent('  ').convert(json);
   }
@@ -124,6 +126,17 @@ class BackupService {
         }
       }
 
+      // Goals were added in version 5; older backups simply have none.
+      final goals = map['goals'] == null
+          ? <Goal>[]
+          : list('goals').map(Goal.fromMap).toList();
+      final goalIds = <int>{};
+      for (final g in goals) {
+        if (g.id == null || !goalIds.add(g.id!)) {
+          throw const BackupFormatException('Duplicate or missing goal id.');
+        }
+      }
+
       _validate(categories, transactions, budgets);
       return BackupData(
         accounts: accounts,
@@ -133,8 +146,7 @@ class BackupService {
         settings: settings,
         notes: notes,
         recurring: recurring,
-        exportedAt: DateTime.tryParse('${map['exportedAt']}'),
-      );
+        goals: goals,
         exportedAt: DateTime.tryParse('${map['exportedAt']}'),
       );
     } on BackupFormatException {

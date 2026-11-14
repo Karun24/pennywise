@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pennywise/database/default_categories.dart';
 import 'package:pennywise/models/account.dart';
 import 'package:pennywise/models/category.dart';
+import 'package:pennywise/models/goal.dart';
 import 'package:pennywise/models/note.dart';
 import 'package:pennywise/models/transaction_entry.dart';
 import 'package:pennywise/repositories/in_memory_finance_repository.dart';
@@ -290,6 +291,70 @@ void main() {
           .copyWith(tag: 'Vacation'));
 
       expect(s.allTags, containsAll(['Vacation', 'Goa2026', 'Beach']));
+    });
+  });
+
+  group('savings goals', () {
+    test('create, update, add savings and delete a goal', () async {
+      final s = await newStore();
+      final deadline = DateTime(2027, 5, 6);
+      final goal = await s.addGoal(Goal(
+        name: 'Japan Trip',
+        targetMinor: 15000000, // 1,50,000
+        savedMinor: 3000000, // 30,000
+        targetDate: deadline,
+        colorValue: 0xFF34D399,
+        iconKey: 'travel',
+        createdAt: now,
+        updatedAt: now,
+      ));
+
+      expect(s.goals.single.name, 'Japan Trip');
+      expect(s.goals.single.percentage, 20);
+      expect(s.goals.single.remainingMinor, 12000000);
+      expect(s.totalSavedInGoals, 3000000);
+
+      // Remaining 6 months: suggested contribution should be 120000 / 6 = 20000
+      final suggested = s.goals.single.suggestedMonthlyMinor(now);
+      expect(suggested, isNotNull);
+      expect(suggested!, 2000000);
+
+      // Add savings
+      await s.addGoalSavings(goal, 2000000);
+      expect(s.goals.single.savedMinor, 5000000);
+      expect(s.goals.single.isAchieved, isFalse);
+
+      // Complete goal
+      await s.addGoalSavings(s.goals.single, 10000000);
+      expect(s.goals.single.savedMinor, 15000000);
+      expect(s.goals.single.isAchieved, isTrue);
+
+      // Delete goal
+      await s.deleteGoal(s.goals.single);
+      expect(s.goals, isEmpty);
+    });
+
+    test('goals are preserved in backup roundtrip', () async {
+      final s = await newStore();
+      await s.addGoal(Goal(
+        name: 'MacBook Pro',
+        targetMinor: 20000000,
+        savedMinor: 5000000,
+        colorValue: 0xFF4FC3F7,
+        iconKey: 'laptop',
+        createdAt: now,
+        updatedAt: now,
+      ));
+
+      final json = BackupService.encode(s.snapshot());
+      final decoded = BackupService.decode(json);
+      expect(decoded.goals.single.name, 'MacBook Pro');
+      expect(decoded.goals.single.targetMinor, 20000000);
+
+      final other = await newStore();
+      await other.restore(decoded);
+      expect(other.goals.single.name, 'MacBook Pro');
+      expect(other.goals.single.savedMinor, 5000000);
     });
   });
 }

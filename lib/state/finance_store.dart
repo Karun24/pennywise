@@ -5,6 +5,7 @@ import '../models/account.dart';
 import '../models/app_settings.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/goal.dart';
 import '../models/note.dart';
 import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
@@ -51,6 +52,7 @@ class FinanceStore extends ChangeNotifier {
   List<CategoryBudget> _budgets = const [];
   List<Note> _notes = const [];
   List<RecurringRule> _recurring = const [];
+  List<Goal> _goals = const [];
   String? _notice;
   AppSettings _settings = const AppSettings();
   Map<int, Category> _categoryIndex = const {};
@@ -69,6 +71,9 @@ class FinanceStore extends ChangeNotifier {
   List<Category> get categories => _categories;
   List<TransactionEntry> get transactions => _transactions;
   List<CategoryBudget> get budgets => _budgets;
+  List<Goal> get goals => _goals;
+  int get totalSavedInGoals =>
+      _goals.fold<int>(0, (sum, g) => sum + g.savedMinor);
   ReminderScheduler get reminders => _reminders;
 
   Account? accountById(int? id) => id == null ? null : _accountIndex[id];
@@ -208,6 +213,7 @@ class FinanceStore extends ChangeNotifier {
       _repo.getNotes(),
       _repo.getRecurring(),
       _repo.getAccounts(),
+      _repo.getGoals(),
     ]);
     _categories = results[0] as List<Category>;
     _transactions = results[1] as List<TransactionEntry>;
@@ -220,6 +226,7 @@ class FinanceStore extends ChangeNotifier {
       });
     _recurring = results[5] as List<RecurringRule>;
     _accounts = results[6] as List<Account>;
+    _goals = results[7] as List<Goal>;
     _categoryIndex = {for (final c in _categories) c.id!: c};
     _accountIndex = {for (final a in _accounts) a.id!: a};
     _version++;
@@ -657,6 +664,56 @@ class FinanceStore extends ChangeNotifier {
     return _insights;
   }
 
+  // -------------------------------------------------------------------- goals
+
+  Future<Goal> addGoal(Goal goal) {
+    return _guard('create the goal', () async {
+      final errors = goal.validate();
+      if (errors.isNotEmpty) throw StoreException(errors.first);
+      final created = await _repo.insertGoal(goal);
+      await _reloadAll();
+      notifyListeners();
+      return created;
+    });
+  }
+
+  Future<void> updateGoal(Goal goal) {
+    return _guard('update the goal', () async {
+      final errors = goal.validate();
+      if (errors.isNotEmpty) throw StoreException(errors.first);
+      await _repo.updateGoal(goal);
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  Future<void> deleteGoal(Goal goal) {
+    return _guard('delete the goal', () async {
+      if (goal.id == null) return;
+      await _repo.deleteGoal(goal.id!);
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  Future<void> addGoalSavings(Goal goal, int amountMinor) {
+    return _guard('add savings to goal', () async {
+      if (amountMinor <= 0) {
+        throw const StoreException('Savings amount must be greater than zero.');
+      }
+      final newSaved = goal.savedMinor + amountMinor;
+      final isAchieved = newSaved >= goal.targetMinor;
+      final updated = goal.copyWith(
+        savedMinor: newSaved,
+        completed: isAchieved,
+        updatedAt: DateTime.now(),
+      );
+      await _repo.updateGoal(updated);
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
   // -------------------------------------------------------------- bulk data
 
   BackupData snapshot() => BackupData(
@@ -667,6 +724,7 @@ class FinanceStore extends ChangeNotifier {
         settings: _settings.toKeyValues(),
         notes: _notes,
         recurring: _recurring,
+        goals: _goals,
         exportedAt: now,
       );
 

@@ -19,6 +19,7 @@ import '../../widgets/insight_card.dart';
 import '../../widgets/transaction_tile.dart';
 import '../../widgets/update_widgets.dart';
 import '../add_transaction/add_transaction_screen.dart';
+import '../goals/goals_screen.dart';
 import '../history/history_screen.dart';
 import '../notes/note_editor_screen.dart';
 import '../notes/notes_screen.dart';
@@ -60,6 +61,8 @@ class HomeScreen extends StatelessWidget {
               _CategoryCard(),
               SizedBox(height: 16),
               _BudgetCard(),
+              SizedBox(height: 16),
+              _GoalsHomeCard(),
               SizedBox(height: 16),
               _RecentCard(),
             ],
@@ -881,6 +884,101 @@ class _BudgetCard extends StatelessWidget {
                   value: s.ratio, color: _levelColor(context, s.level)),
               const SizedBox(height: 14),
             ],
+        ],
+      ),
+    );
+  }
+}
+
+class _GoalsHomeCard extends StatelessWidget {
+  const _GoalsHomeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<FinanceStore>();
+    final goals = store.goals.where((g) => !g.isAchieved).take(2).toList();
+    if (goals.isEmpty) return const SizedBox.shrink();
+
+    final currency = store.currency;
+    return PennyCard(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+      child: Column(
+        children: [
+          SectionHeader(
+            title: 'Savings goals',
+            actionLabel: 'See all',
+            onAction: () => GoalsScreen.open(context),
+          ),
+          for (final g in goals) ...[
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => GoalsScreen.open(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: g.color.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            CategoryIcons.of(g.iconKey),
+                            size: 16,
+                            color: g.color,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            g.name,
+                            style: context.text.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${g.percentage}%',
+                          style: context.text.labelMedium?.copyWith(
+                            color: g.color,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: g.progressRatio,
+                        minHeight: 6,
+                        backgroundColor: context.penny.border,
+                        valueColor: AlwaysStoppedAnimation<Color>(g.color),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${Money.format(g.savedMinor, currency)} of ${Money.format(g.targetMinor, currency)}',
+                          style: context.text.bodySmall?.copyWith(fontSize: 11),
+                        ),
+                        Text(
+                          '${Money.format(g.remainingMinor, currency)} left',
+                          style: context.text.bodySmall?.copyWith(fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

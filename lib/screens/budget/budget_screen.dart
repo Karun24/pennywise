@@ -6,11 +6,14 @@ import '../../models/transaction_entry.dart';
 import '../../services/budget_service.dart';
 import '../../state/finance_store.dart';
 import '../../theme/theme_ext.dart';
+import '../../utils/category_icons.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/money.dart';
 import '../../widgets/charts/donut_chart.dart';
 import '../../widgets/common.dart';
 import '../../widgets/dialogs.dart';
+import '../goals/goal_editor_sheet.dart';
+import '../goals/goals_screen.dart';
 
 Color budgetColor(BuildContext context, BudgetLevel level) => switch (level) {
       BudgetLevel.safe => context.penny.income,
@@ -205,9 +208,149 @@ class BudgetScreen extends StatelessWidget {
               const SizedBox(height: 12),
               _AllocationNote(overview: o, currency: c),
             ],
+            const SizedBox(height: 24),
+            const _GoalsSection(),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _GoalsSection extends StatelessWidget {
+  const _GoalsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<FinanceStore>();
+    final currency = store.currency;
+    final goals = store.goals;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Savings goals',
+          subtitle: 'Track your savings progress',
+          actionLabel: goals.isEmpty ? 'New goal' : 'See all',
+          onAction: () => goals.isEmpty
+              ? showGoalEditor(context)
+              : GoalsScreen.open(context),
+        ),
+        if (goals.isEmpty)
+          PennyCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: context.penny.income.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.savings_rounded, color: context.penny.income),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('No savings goals yet',
+                          style: context.text.titleSmall),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Set targets for an emergency fund, travel, or purchases.',
+                        style: context.text.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => showGoalEditor(context),
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+          )
+        else
+          PennyCard(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: Column(
+              children: [
+                for (final g in goals.take(3)) ...[
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => GoalsScreen.open(context),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: g.color.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  CategoryIcons.of(g.iconKey),
+                                  size: 18,
+                                  color: g.color,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  g.name,
+                                  style: context.text.titleSmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                '${g.percentage}%',
+                                style: context.text.labelMedium?.copyWith(
+                                  color: g.color,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: g.progressRatio,
+                              minHeight: 6,
+                              backgroundColor: context.penny.border,
+                              valueColor: AlwaysStoppedAnimation<Color>(g.color),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${Money.format(g.savedMinor, currency)} saved',
+                                style: context.text.bodySmall?.copyWith(fontSize: 11),
+                              ),
+                              Text(
+                                'Target: ${Money.format(g.targetMinor, currency)}',
+                                style: context.text.bodySmall?.copyWith(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

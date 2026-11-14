@@ -1,6 +1,7 @@
 import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/goal.dart';
 import '../models/note.dart';
 import '../models/recurring_rule.dart';
 import '../models/transaction_entry.dart';
@@ -55,6 +56,11 @@ abstract class FinanceRepository {
   /// so a crash can never add the same occurrence twice.
   Future<void> applyRecurring(
       List<TransactionEntry> created, List<RecurringRule> updated);
+
+  Future<List<Goal>> getGoals();
+  Future<Goal> insertGoal(Goal goal);
+  Future<void> updateGoal(Goal goal);
+  Future<void> deleteGoal(int id);
 
   Future<Map<String, String>> getSettings();
   Future<void> saveSettings(Map<String, String> values);

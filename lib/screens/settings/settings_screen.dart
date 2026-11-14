@@ -16,6 +16,7 @@ import '../../widgets/common.dart';
 import '../../widgets/dialogs.dart';
 import '../../widgets/segmented.dart';
 import '../../widgets/update_widgets.dart';
+import '../goals/goals_screen.dart';
 import '../notes/notes_screen.dart';
 import '../recurring/recurring_screen.dart';
 import 'manage_accounts_screen.dart';
@@ -82,6 +83,12 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Starting balance',
                 value: Money.format(s.startingBalanceMinor, c),
                 onTap: () => _editStartingBalance(context),
+              ),
+              _Tile(
+                icon: Icons.savings_rounded,
+                title: 'Savings goals',
+                value: '${store.goals.length}',
+                onTap: () => GoalsScreen.open(context),
               ),
               _Tile(
                 icon: Icons.account_balance_rounded,

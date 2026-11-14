@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/note.dart';
+import '../models/recurring_rule.dart';
 import '../utils/date_utils.dart';
 
 /// Notification payloads understood by the app.
@@ -169,27 +170,68 @@ class LocalReminderScheduler implements ReminderScheduler {
     );
   }
 
+  static DateTime _stepDate(DateTime from, RepeatFrequency freq) {
+    return switch (freq) {
+      RepeatFrequency.daily => from.add(const Duration(days: 1)),
+      RepeatFrequency.weekly => from.add(const Duration(days: 7)),
+      RepeatFrequency.monthly => DateTime(
+          from.year, from.month + 1, from.day, from.hour, from.minute, from.second),
+      RepeatFrequency.yearly => DateTime(
+          from.year + 1, from.month, from.day, from.hour, from.minute, from.second),
+    };
+  }
+
   @override
   Future<bool> schedule(Note note) async {
     final id = note.id;
     if (!_ready || id == null) return false;
     try {
-      await _plugin.cancel(id: id);
+      await cancel(id);
       final at = note.reminderAt;
-      if (at == null || !at.isAfter(DateTime.now())) return true;
+      if (at == null) return true;
+      final now = DateTime.now();
+      if (note.repeatUntil != null && now.isAfter(note.repeatUntil!)) return true;
+
       final body = note.body.trim().isEmpty
           ? 'Reminder from your notes'
           : note.body.trim();
-      await _scheduleAt(
-        id: id,
-        at: at,
-        title: note.displayTitle,
-        body: body,
-        payload: ReminderPayload.note(id),
-        channelId: _noteChannelId,
-        channelName: _noteChannelName,
-        channelDescription: 'Reminders you set on your PennyWise notes',
-      );
+
+      if (note.repeatFrequency == null) {
+        if (!at.isAfter(now)) return true;
+        await _scheduleAt(
+          id: id,
+          at: at,
+          title: note.displayTitle,
+          body: body,
+          payload: ReminderPayload.note(id),
+          channelId: _noteChannelId,
+          channelName: _noteChannelName,
+          channelDescription: 'Reminders you set on your PennyWise notes',
+        );
+      } else {
+        final freq = note.repeatFrequency!;
+        final until = note.repeatUntil ?? now.add(const Duration(days: 30));
+        var current = at;
+        while (!current.isAfter(now)) {
+          current = _stepDate(current, freq);
+        }
+        var slot = 0;
+        const maxSlots = 30;
+        while (!current.isAfter(until) && slot < maxSlots) {
+          await _scheduleAt(
+            id: (id * 100) + slot,
+            at: current,
+            title: note.displayTitle,
+            body: body,
+            payload: ReminderPayload.note(id),
+            channelId: _noteChannelId,
+            channelName: _noteChannelName,
+            channelDescription: 'Repeating reminder from your notes',
+          );
+          slot++;
+          current = _stepDate(current, freq);
+        }
+      }
       return true;
     } catch (e) {
       debugPrint('PennyWise: could not schedule reminder: $e');
@@ -202,6 +244,9 @@ class LocalReminderScheduler implements ReminderScheduler {
     if (!_ready) return;
     try {
       await _plugin.cancel(id: noteId);
+      for (var slot = 0; slot < 30; slot++) {
+        await _plugin.cancel(id: (noteId * 100) + slot);
+      }
     } catch (e) {
       debugPrint('PennyWise: could not cancel reminder: $e');
     }
@@ -249,11 +294,29 @@ class LocalReminderScheduler implements ReminderScheduler {
   }
 }
 
-/// "Today, 9:00 AM", "Tomorrow, 8:30 PM", "Fri 14 Nov, 9:00 AM".
-String reminderLabel(DateTime at, DateTime now) {
+/// "Today, 9:00 AM", "Tomorrow, 8:30 PM", or "Every day at 9:00 AM until 30 Nov".
+String reminderLabel(
+  DateTime at,
+  DateTime now, {
+  RepeatFrequency? repeat,
+  DateTime? repeatUntil,
+}) {
+  final time = DateUtilsX.time(at);
+  if (repeat != null) {
+    final untilText = repeatUntil != null
+        ? ' until ${DateUtilsX.dayMonth(repeatUntil)}'
+        : '';
+    final freq = switch (repeat) {
+      RepeatFrequency.daily => 'Every day',
+      RepeatFrequency.weekly => 'Every week',
+      RepeatFrequency.monthly => 'Every month',
+      RepeatFrequency.yearly => 'Every year',
+    };
+    return '$freq at $time$untilText';
+  }
+
   final day = DateUtilsX.dateOnly(at);
   final today = DateUtilsX.dateOnly(now);
-  final time = DateUtilsX.time(at);
   if (day == today) return 'Today, $time';
   if (day == DateUtilsX.addDays(today, 1)) return 'Tomorrow, $time';
   if (day == DateUtilsX.addDays(today, -1)) return 'Yesterday, $time';

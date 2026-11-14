@@ -43,6 +43,47 @@ class PennyColors extends ThemeExtension<PennyColors> {
     primaryGradient: [Color(0xFF6D4AFF), Color(0xFFA78BFA)],
   );
 
+  static PennyColors buildDark({
+    bool amoled = false,
+    Color? accent,
+    List<Color>? primaryGradient,
+  }) {
+    return PennyColors(
+      income: const Color(0xFF34D399),
+      expense: const Color(0xFFFF7A90),
+      warning: const Color(0xFFFBBF24),
+      accent: accent ?? const Color(0xFF2DD4BF),
+      textMuted: const Color(0xFF9AA3C7),
+      border: amoled ? const Color(0xFF22222E) : const Color(0xFF222B4D),
+      surfaceHigh: amoled ? const Color(0xFF121218) : const Color(0xFF1A2244),
+      chartGrid: amoled ? const Color(0xFF181822) : const Color(0xFF232C4F),
+      heroGradient: amoled
+          ? const [Color(0xFF151520), Color(0xFF2A2A3C), Color(0xFF44445A)]
+          : const [Color(0xFF2B1B7E), Color(0xFF5B3DF5), Color(0xFF9378FF)],
+      primaryGradient: primaryGradient ??
+          const [Color(0xFF6D4AFF), Color(0xFFA78BFA)],
+    );
+  }
+
+  static PennyColors buildLight({
+    Color? accent,
+    List<Color>? primaryGradient,
+  }) {
+    return PennyColors(
+      income: const Color(0xFF0E9F6E),
+      expense: const Color(0xFFE5486A),
+      warning: const Color(0xFFD97706),
+      accent: accent ?? const Color(0xFF0D9488),
+      textMuted: const Color(0xFF6B7194),
+      border: const Color(0xFFE4E7F2),
+      surfaceHigh: const Color(0xFFF0F1F8),
+      chartGrid: const Color(0xFFE8EAF4),
+      heroGradient: const [Color(0xFF3A22B8), Color(0xFF6246F5), Color(0xFF9C84FF)],
+      primaryGradient: primaryGradient ??
+          const [Color(0xFF6246F5), Color(0xFF9C84FF)],
+    );
+  }
+
   static const light = PennyColors(
     income: Color(0xFF0E9F6E),
     expense: Color(0xFFE5486A),

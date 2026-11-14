@@ -1,5 +1,6 @@
 import 'account.dart';
 import 'category.dart';
+import 'debt_entry.dart';
 import 'goal.dart';
 import 'note.dart';
 import 'recurring_rule.dart';
@@ -16,6 +17,7 @@ class BackupData {
     this.recurring = const [],
     this.accounts = const [],
     this.goals = const [],
+    this.debts = const [],
     this.exportedAt,
   });
 
@@ -27,5 +29,6 @@ class BackupData {
   final List<RecurringRule> recurring;
   final List<Account> accounts;
   final List<Goal> goals;
+  final List<DebtEntry> debts;
   final DateTime? exportedAt;
 }

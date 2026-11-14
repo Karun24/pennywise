@@ -19,6 +19,7 @@ import '../../widgets/insight_card.dart';
 import '../../widgets/transaction_tile.dart';
 import '../../widgets/update_widgets.dart';
 import '../add_transaction/add_transaction_screen.dart';
+import '../debts/debts_screen.dart';
 import '../goals/goals_screen.dart';
 import '../history/history_screen.dart';
 import '../notes/note_editor_screen.dart';
@@ -64,6 +65,8 @@ class HomeScreen extends StatelessWidget {
               _BudgetCard(),
               SizedBox(height: 16),
               _GoalsHomeCard(),
+              SizedBox(height: 16),
+              _DebtsHomeCard(),
               SizedBox(height: 16),
               _RecentCard(),
             ],
@@ -986,6 +989,90 @@ class _GoalsHomeCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DebtsHomeCard extends StatelessWidget {
+  const _DebtsHomeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<FinanceStore>();
+    final pending = store.pendingDebts;
+    if (pending.isEmpty) return const SizedBox.shrink();
+
+    final currency = store.currency;
+    final totalOwed = store.totalOwedToMeMinor;
+    final totalIOwe = store.totalIOweMinor;
+
+    return PennyCard(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+      child: Column(
+        children: [
+          SectionHeader(
+            title: 'Debts & IOUs',
+            actionLabel: 'See all (${pending.length})',
+            onAction: () => DebtsScreen.open(context),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (totalOwed > 0)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: context.penny.income.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Owed to you', style: context.text.labelSmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          Money.format(totalOwed, currency),
+                          style: context.text.titleSmall?.copyWith(
+                            color: context.penny.income,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (totalOwed > 0 && totalIOwe > 0) const SizedBox(width: 10),
+              if (totalIOwe > 0)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: context.penny.expense.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('You owe', style: context.text.labelSmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          Money.format(totalIOwe, currency),
+                          style: context.text.titleSmall?.copyWith(
+                            color: context.penny.expense,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );

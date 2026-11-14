@@ -11,6 +11,26 @@ enum AppThemePreference {
       .firstWhere((e) => e.name == v, orElse: () => AppThemePreference.dark);
 }
 
+/// Accent color palettes for theming.
+enum AppAccentColor {
+  indigo('Royal Indigo', 0xFF6366F1, 0xFF4F46E5, 0xFF818CF8),
+  emerald('Emerald Green', 0xFF10B981, 0xFF059669, 0xFF34D399),
+  amber('Sunset Amber', 0xFFF59E0B, 0xFFD97706, 0xFFFBBF24),
+  cyan('Cyber Cyan', 0xFF06B6D4, 0xFF0891B2, 0xFF22D3EE),
+  rose('Rose Ruby', 0xFFF43F5E, 0xFFE11D48, 0xFFFB7185),
+  violet('Neon Violet', 0xFF8B5CF6, 0xFF7C3AED, 0xFFA78BFA);
+
+  const AppAccentColor(
+      this.label, this.primaryValue, this.darkValue, this.lightValue);
+  final String label;
+  final int primaryValue;
+  final int darkValue;
+  final int lightValue;
+
+  static AppAccentColor fromName(String? v) => AppAccentColor.values
+      .firstWhere((e) => e.name == v, orElse: () => AppAccentColor.indigo);
+}
+
 class AppSettings {
   const AppSettings({
     this.theme = AppThemePreference.dark,
@@ -21,6 +41,8 @@ class AppSettings {
     this.dailyReminder = false,
     this.dailyReminderMinutes = 21 * 60,
     this.appLock = false,
+    this.amoledDark = false,
+    this.accentColor = AppAccentColor.indigo,
   });
 
   final AppThemePreference theme;
@@ -44,6 +66,12 @@ class AppSettings {
   /// Require fingerprint / face / phone PIN to open the app.
   final bool appLock;
 
+  /// Pitch-black true AMOLED dark mode for OLED screens.
+  final bool amoledDark;
+
+  /// Selected accent color palette.
+  final AppAccentColor accentColor;
+
   static const keyTheme = 'theme';
   static const keyCurrency = 'currency';
   static const keyMonthlyBudget = 'monthly_budget_minor';
@@ -52,6 +80,8 @@ class AppSettings {
   static const keyDailyReminder = 'daily_reminder';
   static const keyDailyReminderMinutes = 'daily_reminder_minutes';
   static const keyAppLock = 'app_lock';
+  static const keyAmoledDark = 'amoled_dark';
+  static const keyAccentColor = 'accent_color';
 
   AppSettings copyWith({
     AppThemePreference? theme,
@@ -63,6 +93,8 @@ class AppSettings {
     bool? dailyReminder,
     int? dailyReminderMinutes,
     bool? appLock,
+    bool? amoledDark,
+    AppAccentColor? accentColor,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -75,6 +107,8 @@ class AppSettings {
       dailyReminder: dailyReminder ?? this.dailyReminder,
       dailyReminderMinutes: dailyReminderMinutes ?? this.dailyReminderMinutes,
       appLock: appLock ?? this.appLock,
+      amoledDark: amoledDark ?? this.amoledDark,
+      accentColor: accentColor ?? this.accentColor,
     );
   }
 
@@ -87,6 +121,8 @@ class AppSettings {
         keyDailyReminder: dailyReminder ? '1' : '0',
         keyDailyReminderMinutes: dailyReminderMinutes.toString(),
         keyAppLock: appLock ? '1' : '0',
+        keyAmoledDark: amoledDark ? '1' : '0',
+        keyAccentColor: accentColor.name,
       };
 
   factory AppSettings.fromKeyValues(Map<String, String> kv) {
@@ -104,6 +140,8 @@ class AppSettings {
           (int.tryParse(kv[keyDailyReminderMinutes] ?? '') ?? 21 * 60)
               .clamp(0, 24 * 60 - 1),
       appLock: kv[keyAppLock] == '1',
+      amoledDark: kv[keyAmoledDark] == '1',
+      accentColor: AppAccentColor.fromName(kv[keyAccentColor]),
     );
   }
 }

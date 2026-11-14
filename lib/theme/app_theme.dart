@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/app_settings.dart';
 import 'penny_colors.dart';
 
 /// PennyWise design system: midnight navy, purple/lavender gradients,
@@ -12,29 +13,53 @@ class AppTheme {
   static const radiusSmall = 16.0;
   static const fontFamily = 'Inter';
 
-  static ThemeData dark() => _build(
-        brightness: Brightness.dark,
-        background: const Color(0xFF0A0F1F),
-        surface: const Color(0xFF121935),
-        surfaceHigh: const Color(0xFF1A2244),
-        onSurface: const Color(0xFFF2F3FF),
-        primary: const Color(0xFF8B6CFF),
-        secondary: const Color(0xFF2DD4BF),
-        error: const Color(0xFFFF7A90),
-        penny: PennyColors.dark,
-      );
+  static ThemeData dark({
+    bool amoled = false,
+    AppAccentColor accent = AppAccentColor.indigo,
+  }) {
+    final primary = Color(accent.primaryValue);
+    final accentColor = Color(accent.lightValue);
+    final gradient = [Color(accent.darkValue), Color(accent.lightValue)];
 
-  static ThemeData light() => _build(
-        brightness: Brightness.light,
-        background: const Color(0xFFF5F6FB),
-        surface: Colors.white,
-        surfaceHigh: const Color(0xFFF0F1F8),
-        onSurface: const Color(0xFF0E1330),
-        primary: const Color(0xFF6246F5),
-        secondary: const Color(0xFF0D9488),
-        error: const Color(0xFFE5486A),
-        penny: PennyColors.light,
-      );
+    return _build(
+      brightness: Brightness.dark,
+      background: amoled ? const Color(0xFF000000) : const Color(0xFF0A0F1F),
+      surface: amoled ? const Color(0xFF0A0A0F) : const Color(0xFF121935),
+      surfaceHigh: amoled ? const Color(0xFF14141C) : const Color(0xFF1A2244),
+      onSurface: const Color(0xFFF2F3FF),
+      primary: primary,
+      secondary: accentColor,
+      error: const Color(0xFFFF7A90),
+      penny: PennyColors.buildDark(
+        amoled: amoled,
+        accent: accentColor,
+        primaryGradient: gradient,
+      ),
+    );
+  }
+
+  static ThemeData light({
+    AppAccentColor accent = AppAccentColor.indigo,
+  }) {
+    final primary = Color(accent.darkValue);
+    final accentColor = Color(accent.primaryValue);
+    final gradient = [Color(accent.darkValue), Color(accent.lightValue)];
+
+    return _build(
+      brightness: Brightness.light,
+      background: const Color(0xFFF5F6FB),
+      surface: Colors.white,
+      surfaceHigh: const Color(0xFFF0F1F8),
+      onSurface: const Color(0xFF0E1330),
+      primary: primary,
+      secondary: accentColor,
+      error: const Color(0xFFE5486A),
+      penny: PennyColors.buildLight(
+        accent: accentColor,
+        primaryGradient: gradient,
+      ),
+    );
+  }
 
   static ThemeData _build({
     required Brightness brightness,

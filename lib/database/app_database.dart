@@ -14,7 +14,7 @@ class AppDatabase {
   static const fileName = 'pennywise.db';
 
   /// Bump this and add a step in [_onUpgrade] whenever the schema changes.
-  static const schemaVersion = 6;
+  static const schemaVersion = 7;
 
   static const tCategories = 'categories';
   static const tTransactions = 'transactions';
@@ -24,6 +24,7 @@ class AppDatabase {
   static const tRecurring = 'recurring';
   static const tAccounts = 'accounts';
   static const tGoals = 'goals';
+  static const tDebts = 'debts';
 
   static Future<Database> open({String? overridePath}) async {
     final path = overridePath ?? p.join(await getDatabasesPath(), fileName);
@@ -99,6 +100,25 @@ class AppDatabase {
     await _createNotes(db);
     await _createRecurring(db);
     await _createGoals(db);
+    await _createDebts(db);
+  }
+
+  /// Added in schema version 7.
+  static Future<void> _createDebts(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tDebts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name TEXT NOT NULL,
+        amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+        type TEXT NOT NULL CHECK (type IN ('lent', 'borrowed')),
+        note TEXT NOT NULL DEFAULT '',
+        due_date INTEGER,
+        is_settled INTEGER NOT NULL DEFAULT 0,
+        settled_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
   }
 
   /// Added in schema version 5.
@@ -168,6 +188,8 @@ class AppDatabase {
         body TEXT NOT NULL DEFAULT '',
         pinned INTEGER NOT NULL DEFAULT 0,
         reminder_at INTEGER,
+        repeat_frequency TEXT,
+        repeat_until INTEGER,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -226,6 +248,11 @@ class AppDatabase {
     }
     if (oldVersion < 6) {
       await db.execute('ALTER TABLE $tTransactions ADD COLUMN receipt_path TEXT');
+    }
+    if (oldVersion < 7) {
+      await db.execute('ALTER TABLE $tNotes ADD COLUMN repeat_frequency TEXT');
+      await db.execute('ALTER TABLE $tNotes ADD COLUMN repeat_until INTEGER');
+      await _createDebts(db);
     }
   }
 

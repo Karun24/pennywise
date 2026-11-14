@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pennywise/database/default_categories.dart';
 import 'package:pennywise/models/account.dart';
+import 'package:pennywise/models/app_settings.dart';
 import 'package:pennywise/models/category.dart';
+import 'package:pennywise/models/debt_entry.dart';
 import 'package:pennywise/models/goal.dart';
 import 'package:pennywise/models/note.dart';
+import 'package:pennywise/models/recurring_rule.dart';
 import 'package:pennywise/models/transaction_entry.dart';
 import 'package:pennywise/repositories/in_memory_finance_repository.dart';
 import 'package:pennywise/services/backup_service.dart';
@@ -213,9 +216,11 @@ void main() {
       jsonMap.remove('accounts');
       jsonMap.remove('recurring');
       jsonMap.remove('goals');
+      jsonMap.remove('debts');
       final old = BackupService.decode(jsonEncode(jsonMap));
       expect(old.notes, isEmpty);
       expect(old.accounts, isEmpty);
+      expect(old.debts, isEmpty);
     });
   });
 
@@ -425,6 +430,139 @@ void main() {
       final cleared = entry.copyWith(clearReceipt: true);
       expect(cleared.hasReceipt, isFalse);
       expect(cleared.receiptPath, isNull);
+    });
+  });
+
+  group('Repeating Note Reminders & End Dates', () {
+    test('repeating note reminder fields and serialization', () {
+      final repeatUntil = DateTime(2026, 12, 31, 23, 59, 59);
+      final note = Note(
+        title: 'Rent payment reminder',
+        body: 'Pay rent on 1st of every month',
+        reminderAt: DateTime(2026, 11, 1, 9, 0),
+        repeatFrequency: RepeatFrequency.monthly,
+        repeatUntil: repeatUntil,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      expect(note.isRepeating, isTrue);
+      expect(note.repeatFrequency, RepeatFrequency.monthly);
+      expect(note.repeatUntil, repeatUntil);
+      expect(note.hasUpcomingReminder(DateTime(2026, 11, 15)), isTrue);
+      expect(note.hasUpcomingReminder(DateTime(2027, 1, 1)), isFalse);
+
+      final map = note.toMap();
+      expect(map['repeat_frequency'], 'monthly');
+      expect(map['repeat_until'], repeatUntil.millisecondsSinceEpoch);
+
+      final restored = Note.fromMap(map);
+      expect(restored.isRepeating, isTrue);
+      expect(restored.repeatFrequency, RepeatFrequency.monthly);
+      expect(restored.repeatUntil, repeatUntil);
+
+      final cleared = note.copyWith(clearRepeat: true, clearRepeatUntil: true);
+      expect(cleared.isRepeating, isFalse);
+      expect(cleared.repeatFrequency, isNull);
+      expect(cleared.repeatUntil, isNull);
+    });
+  });
+
+  group('DebtEntry & Split Bill Store', () {
+    test('debt validation and serialization', () {
+      final debt = DebtEntry(
+        personName: 'Ravi',
+        amountMinor: 50000,
+        type: DebtType.lent,
+        note: 'Dinner split',
+        dueDate: DateTime(2026, 11, 20),
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      expect(debt.validate(), isEmpty);
+      expect(debt.isLent, isTrue);
+      expect(debt.isBorrowed, isFalse);
+      expect(debt.isOverdue(DateTime(2026, 11, 25)), isTrue);
+      expect(debt.isOverdue(DateTime(2026, 11, 15)), isFalse);
+
+      final map = debt.toMap();
+      final restored = DebtEntry.fromMap(map);
+      expect(restored.personName, 'Ravi');
+      expect(restored.amountMinor, 50000);
+      expect(restored.type, DebtType.lent);
+      expect(restored.note, 'Dinner split');
+      expect(restored.dueDate, DateTime(2026, 11, 20));
+      expect(restored.isSettled, isFalse);
+    });
+
+    test('add, update, settle and delete debts in store', () async {
+      final s = await newStore();
+
+      // Add a lent debt
+      final lent = await s.addDebt(DebtEntry(
+        personName: 'Sneha',
+        amountMinor: 150000,
+        type: DebtType.lent,
+        note: 'Concert ticket',
+        createdAt: now,
+        updatedAt: now,
+      ));
+
+      // Add a borrowed debt
+      final borrowed = await s.addDebt(DebtEntry(
+        personName: 'Vikram',
+        amountMinor: 50000,
+        type: DebtType.borrowed,
+        note: 'Cab share',
+        createdAt: now,
+        updatedAt: now,
+      ));
+
+      expect(s.debts.length, 2);
+      expect(s.pendingDebts.length, 2);
+      expect(s.settledDebts.length, 0);
+      expect(s.totalOwedToMeMinor, 150000);
+      expect(s.totalIOweMinor, 50000);
+
+      // Settle lent debt with auto transaction recording
+      final txCountBefore = s.transactions.length;
+      await s.settleDebt(lent, recordTransaction: true);
+
+      expect(s.pendingDebts.length, 1);
+      expect(s.settledDebts.length, 1);
+      expect(s.totalOwedToMeMinor, 0);
+      expect(s.transactions.length, txCountBefore + 1);
+      expect(s.transactions.first.isIncome, isTrue);
+      expect(s.transactions.first.amountMinor, 150000);
+
+      // Settle borrowed debt with expense transaction
+      await s.settleDebt(borrowed, recordTransaction: true);
+      expect(s.pendingDebts.length, 0);
+      expect(s.settledDebts.length, 2);
+      expect(s.transactions.first.isExpense, isTrue);
+      expect(s.transactions.first.amountMinor, 50000);
+
+      // Delete debt
+      await s.deleteDebt(lent);
+      expect(s.debts.length, 1);
+    });
+  });
+
+  group('AppSettings theme customizer', () {
+    test('amoled and accent color serialization', () {
+      const settings = AppSettings(
+        amoledDark: true,
+        accentColor: AppAccentColor.emerald,
+      );
+
+      final kvs = settings.toKeyValues();
+      expect(kvs['amoled_dark'], 'true');
+      expect(kvs['accent_color'], 'emerald');
+
+      final restored = AppSettings.fromKeyValues(kvs);
+      expect(restored.amoledDark, isTrue);
+      expect(restored.accentColor, AppAccentColor.emerald);
     });
   });
 }

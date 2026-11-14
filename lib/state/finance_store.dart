@@ -5,6 +5,7 @@ import '../models/account.dart';
 import '../models/app_settings.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/debt_entry.dart';
 import '../models/goal.dart';
 import '../models/note.dart';
 import '../models/recurring_rule.dart';
@@ -53,6 +54,7 @@ class FinanceStore extends ChangeNotifier {
   List<Note> _notes = const [];
   List<RecurringRule> _recurring = const [];
   List<Goal> _goals = const [];
+  List<DebtEntry> _debts = const [];
   String? _notice;
   AppSettings _settings = const AppSettings();
   Map<int, Category> _categoryIndex = const {};
@@ -74,6 +76,23 @@ class FinanceStore extends ChangeNotifier {
   List<Goal> get goals => _goals;
   int get totalSavedInGoals =>
       _goals.fold<int>(0, (sum, g) => sum + g.savedMinor);
+  List<DebtEntry> get debts => _debts;
+  List<DebtEntry> get pendingDebts =>
+      _debts.where((d) => !d.isSettled).toList();
+  List<DebtEntry> get settledDebts =>
+      _debts.where((d) => d.isSettled).toList();
+  int get totalOwedToMeMinor => _debts
+      .where((d) => !d.isSettled && d.isLent)
+      .fold<int>(0, (sum, d) => sum + d.amountMinor);
+  int get totalIOweMinor => _debts
+      .where((d) => !d.isSettled && d.isBorrowed)
+      .fold<int>(0, (sum, d) => sum + d.amountMinor);
+  DebtEntry? debtById(int id) {
+    for (final d in _debts) {
+      if (d.id == id) return d;
+    }
+    return null;
+  }
   ReminderScheduler get reminders => _reminders;
 
   Account? accountById(int? id) => id == null ? null : _accountIndex[id];
@@ -214,6 +233,7 @@ class FinanceStore extends ChangeNotifier {
       _repo.getRecurring(),
       _repo.getAccounts(),
       _repo.getGoals(),
+      _repo.getDebts(),
     ]);
     _categories = results[0] as List<Category>;
     _transactions = results[1] as List<TransactionEntry>;
@@ -227,6 +247,7 @@ class FinanceStore extends ChangeNotifier {
     _recurring = results[5] as List<RecurringRule>;
     _accounts = results[6] as List<Account>;
     _goals = results[7] as List<Goal>;
+    _debts = results[8] as List<DebtEntry>;
     _categoryIndex = {for (final c in _categories) c.id!: c};
     _accountIndex = {for (final a in _accounts) a.id!: a};
     _version++;
@@ -478,6 +499,8 @@ class FinanceStore extends ChangeNotifier {
       body: note.body,
       pinned: note.pinned,
       reminderAt: note.reminderAt,
+      repeatFrequency: note.repeatFrequency,
+      repeatUntil: note.repeatUntil,
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
     ));
@@ -714,6 +737,95 @@ class FinanceStore extends ChangeNotifier {
     });
   }
 
+  // -------------------------------------------------------------------- debts
+
+  Future<DebtEntry> addDebt(DebtEntry debt) {
+    return _guard('create the debt', () async {
+      final errors = debt.validate();
+      if (errors.isNotEmpty) throw StoreException(errors.first);
+      final stamp = now;
+      final created = await _repo.insertDebt(
+        debt.copyWith(
+          personName: debt.personName.trim(),
+          createdAt: stamp,
+          updatedAt: stamp,
+        ),
+      );
+      await _reloadAll();
+      notifyListeners();
+      return created;
+    });
+  }
+
+  Future<void> updateDebt(DebtEntry debt) {
+    return _guard('update the debt', () async {
+      final errors = debt.validate();
+      if (errors.isNotEmpty) throw StoreException(errors.first);
+      await _repo.updateDebt(
+        debt.copyWith(
+          personName: debt.personName.trim(),
+          updatedAt: now,
+        ),
+      );
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  Future<void> deleteDebt(DebtEntry debt) {
+    return _guard('delete the debt', () async {
+      if (debt.id == null) return;
+      await _repo.deleteDebt(debt.id!);
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
+  /// Settles a debt. Optionally records a corresponding transaction:
+  /// - If we lent money and are now paid back, record an [income] transaction.
+  /// - If we borrowed money and are now paying back, record an [expense] transaction.
+  Future<void> settleDebt(DebtEntry debt, {int? accountId, bool recordTransaction = true}) {
+    return _guard('settle the debt', () async {
+      final stamp = now;
+      final updated = debt.copyWith(
+        isSettled: true,
+        settledAt: stamp,
+        updatedAt: stamp,
+      );
+      await _repo.updateDebt(updated);
+
+      if (recordTransaction && _categories.isNotEmpty) {
+        final kind = debt.isLent ? TransactionType.income : TransactionType.expense;
+        final matchingCategories = categoriesOf(kind);
+        final catId = matchingCategories.isNotEmpty
+            ? matchingCategories.first.id!
+            : _categories.first.id!;
+        final accId = accountId ?? defaultAccount.id;
+
+        final txNote = debt.isLent
+            ? 'Debt repaid by ${debt.personName}${debt.note.isNotEmpty ? ' (${debt.note})' : ''}'
+            : 'Repaid debt to ${debt.personName}${debt.note.isNotEmpty ? ' (${debt.note})' : ''}';
+
+        final entry = TransactionEntry(
+          type: kind,
+          amountMinor: debt.amountMinor,
+          categoryId: catId,
+          accountId: accId,
+          date: stamp,
+          note: txNote,
+          paymentMethod: PaymentMethod.upi,
+          tags: const ['debt'],
+          createdAt: stamp,
+          updatedAt: stamp,
+        );
+        await _repo.insertTransaction(entry);
+      }
+
+      await _reloadAll();
+      notifyListeners();
+    });
+  }
+
   // -------------------------------------------------------------- bulk data
 
   BackupData snapshot() => BackupData(
@@ -725,6 +837,7 @@ class FinanceStore extends ChangeNotifier {
         notes: _notes,
         recurring: _recurring,
         goals: _goals,
+        debts: _debts,
         exportedAt: now,
       );
 

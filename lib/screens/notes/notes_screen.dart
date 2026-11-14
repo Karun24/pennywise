@@ -264,15 +264,19 @@ class NoteCard extends StatelessWidget {
             children: [
               if (at != null) ...[
                 Icon(
-                    upcoming ? Icons.alarm_rounded : Icons.alarm_off_rounded,
+                    note.isRepeating
+                        ? Icons.repeat_rounded
+                        : (upcoming ? Icons.alarm_rounded : Icons.alarm_off_rounded),
                     size: 15,
                     color: reminderColor),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text(
                     upcoming
-                        ? reminderLabel(at, now)
-                        : 'Reminded ${reminderLabel(at, now)}',
+                        ? reminderLabel(at, now,
+                            repeat: note.repeatFrequency,
+                            repeatUntil: note.repeatUntil)
+                        : 'Reminded ${reminderLabel(at, now, repeat: note.repeatFrequency, repeatUntil: note.repeatUntil)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.text.labelMedium?.copyWith(

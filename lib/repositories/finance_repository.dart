@@ -1,6 +1,7 @@
 import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/debt_entry.dart';
 import '../models/goal.dart';
 import '../models/note.dart';
 import '../models/recurring_rule.dart';
@@ -61,6 +62,11 @@ abstract class FinanceRepository {
   Future<Goal> insertGoal(Goal goal);
   Future<void> updateGoal(Goal goal);
   Future<void> deleteGoal(int id);
+
+  Future<List<DebtEntry>> getDebts();
+  Future<DebtEntry> insertDebt(DebtEntry debt);
+  Future<void> updateDebt(DebtEntry debt);
+  Future<void> deleteDebt(int id);
 
   Future<Map<String, String>> getSettings();
   Future<void> saveSettings(Map<String, String> values);

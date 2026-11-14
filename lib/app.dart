@@ -51,15 +51,22 @@ class PennyWiseApp extends StatelessWidget {
         Provider<AppLockAuthenticator>(
             create: (_) => authenticator ?? DeviceAppLockAuthenticator()),
       ],
-      child: Selector<FinanceStore, AppThemePreference>(
-        selector: (_, s) => s.settings.theme,
-        builder: (context, theme, _) => MaterialApp(
+      child: Selector<FinanceStore, (AppThemePreference, bool, AppAccentColor)>(
+        selector: (_, s) => (
+          s.settings.theme,
+          s.settings.amoledDark,
+          s.settings.accentColor,
+        ),
+        builder: (context, themeData, _) => MaterialApp(
           title: 'PennyWise',
           navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(),
-          darkTheme: AppTheme.dark(),
-          themeMode: _mode(theme),
+          theme: AppTheme.light(accent: themeData.$3),
+          darkTheme: AppTheme.dark(
+            amoled: themeData.$2,
+            accent: themeData.$3,
+          ),
+          themeMode: _mode(themeData.$1),
           // Keep layouts intact with very large accessibility font sizes.
           builder: (context, child) {
             final mq = MediaQuery.of(context);

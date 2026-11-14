@@ -4,6 +4,7 @@ import '../database/app_database.dart';
 import '../models/account.dart';
 import '../models/backup_data.dart';
 import '../models/category.dart';
+import '../models/debt_entry.dart';
 import '../models/goal.dart';
 import '../models/note.dart';
 import '../models/recurring_rule.dart';
@@ -24,6 +25,7 @@ class SqliteFinanceRepository implements FinanceRepository {
   static const _r = AppDatabase.tRecurring;
   static const _a = AppDatabase.tAccounts;
   static const _g = AppDatabase.tGoals;
+  static const _d = AppDatabase.tDebts;
 
   @override
   Future<void> init() async {
@@ -257,6 +259,31 @@ class SqliteFinanceRepository implements FinanceRepository {
     await _db.delete(_g, where: 'id = ?', whereArgs: [id]);
   }
 
+  // -------------------------------------------------------------------- debts
+
+  @override
+  Future<List<DebtEntry>> getDebts() async {
+    final rows = await _db.query(_d, orderBy: 'is_settled ASC, created_at DESC');
+    return rows.map(DebtEntry.fromMap).toList();
+  }
+
+  @override
+  Future<DebtEntry> insertDebt(DebtEntry debt) async {
+    final id = await _db.insert(_d, debt.toMap()..remove('id'));
+    return debt.copyWith(id: id);
+  }
+
+  @override
+  Future<void> updateDebt(DebtEntry debt) async {
+    await _db.update(_d, debt.toMap()..remove('id'),
+        where: 'id = ?', whereArgs: [debt.id]);
+  }
+
+  @override
+  Future<void> deleteDebt(int id) async {
+    await _db.delete(_d, where: 'id = ?', whereArgs: [id]);
+  }
+
   // ------------------------------------------------------------------ settings
 
   @override
@@ -292,6 +319,7 @@ class SqliteFinanceRepository implements FinanceRepository {
       await txn.delete(_n);
       await txn.delete(_a);
       await txn.delete(_g);
+      await txn.delete(_d);
       final batch = txn.batch();
       for (final a in data.accounts) {
         batch.insert(_a, a.toMap());
@@ -317,6 +345,9 @@ class SqliteFinanceRepository implements FinanceRepository {
       for (final g in data.goals) {
         batch.insert(_g, g.toMap());
       }
+      for (final d in data.debts) {
+        batch.insert(_d, d.toMap());
+      }
       await batch.commit(noResult: true);
     });
   }
@@ -332,6 +363,7 @@ class SqliteFinanceRepository implements FinanceRepository {
       await txn.delete(_n);
       await txn.delete(_a);
       await txn.delete(_g);
+      await txn.delete(_d);
       await AppDatabase.seedDefaultCategories(txn);
       await AppDatabase.seedDefaultAccounts(txn);
     });

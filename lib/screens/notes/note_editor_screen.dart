@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/note.dart';
+import '../../models/recurring_rule.dart';
 import '../../services/reminder_service.dart';
 import '../../state/finance_store.dart';
 import '../../theme/theme_ext.dart';
@@ -31,6 +32,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   late final TextEditingController _body =
       TextEditingController(text: widget.existing?.body ?? '');
   late DateTime? _reminder = widget.existing?.reminderAt;
+  late RepeatFrequency? _repeatFrequency = widget.existing?.repeatFrequency;
+  late DateTime? _repeatUntil = widget.existing?.repeatUntil;
   late bool _pinned = widget.existing?.pinned ?? false;
   bool _saving = false;
   bool _dirty = false;
@@ -58,6 +61,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   void _setReminder(DateTime? at) {
     setState(() {
       _reminder = at;
+      if (at == null) {
+        _repeatFrequency = null;
+        _repeatUntil = null;
+      }
       _dirty = true;
     });
   }
@@ -131,10 +138,18 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         pinned: _pinned,
         reminderAt: at,
         clearReminder: at == null,
+        repeatFrequency: at != null ? _repeatFrequency : null,
+        clearRepeat: at == null || _repeatFrequency == null,
+        repeatUntil:
+            at != null && _repeatFrequency != null ? _repeatUntil : null,
+        clearRepeatUntil: at == null ||
+            _repeatFrequency == null ||
+            _repeatUntil == null,
       );
       final result = await store.saveNote(draft);
       navigator.pop();
-      final upcoming = at != null && at.isAfter(DateTime.now());
+      final upcoming = at != null &&
+          (at.isAfter(DateTime.now()) || _repeatFrequency != null);
       if (upcoming && (!permissionOk || !result.reminderOk)) {
         messenger.showSnackBar(pennySnack(
           'Note saved, but notifications are off for PennyWise. Turn them '
@@ -143,7 +158,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         ));
       } else if (upcoming) {
         messenger.showSnackBar(pennySnack(
-            'Reminder set for ${reminderLabel(at, DateTime.now())}'));
+            'Reminder set for ${reminderLabel(at, DateTime.now(), repeat: _repeatFrequency, repeatUntil: _repeatUntil)}'));
       } else {
         messenger.showSnackBar(pennySnack('Note saved'));
       }
@@ -296,8 +311,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                             if (at != null) ...[
                               Text(
                                 upcoming
-                                    ? reminderLabel(at, now)
-                                    : 'Was ${reminderLabel(at, now)} (passed)',
+                                    ? reminderLabel(at, now,
+                                        repeat: _repeatFrequency,
+                                        repeatUntil: _repeatUntil)
+                                    : 'Was ${reminderLabel(at, now, repeat: _repeatFrequency, repeatUntil: _repeatUntil)} (passed)',
                                 style: context.text.titleMedium?.copyWith(
                                     color: upcoming
                                         ? context.penny.accent
@@ -337,6 +354,167 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                                 ),
                               ],
                             ),
+                            if (at != null) ...[
+                              const SizedBox(height: 14),
+                              const Divider(height: 1),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Icon(Icons.repeat_rounded,
+                                      size: 18,
+                                      color: context.penny.textMuted),
+                                  const SizedBox(width: 8),
+                                  Text('Repeat reminder',
+                                      style: context.text.titleSmall),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  ChoiceChip(
+                                    label: const Text('Does not repeat'),
+                                    selected: _repeatFrequency == null,
+                                    onSelected: (sel) {
+                                      if (sel) {
+                                        setState(() {
+                                          _repeatFrequency = null;
+                                          _repeatUntil = null;
+                                          _dirty = true;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  ChoiceChip(
+                                    label: const Text('Every day'),
+                                    selected: _repeatFrequency ==
+                                        RepeatFrequency.daily,
+                                    onSelected: (sel) {
+                                      if (sel) {
+                                        setState(() {
+                                          _repeatFrequency =
+                                              RepeatFrequency.daily;
+                                          _dirty = true;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  ChoiceChip(
+                                    label: const Text('Every week'),
+                                    selected: _repeatFrequency ==
+                                        RepeatFrequency.weekly,
+                                    onSelected: (sel) {
+                                      if (sel) {
+                                        setState(() {
+                                          _repeatFrequency =
+                                              RepeatFrequency.weekly;
+                                          _dirty = true;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  ChoiceChip(
+                                    label: const Text('Every month'),
+                                    selected: _repeatFrequency ==
+                                        RepeatFrequency.monthly,
+                                    onSelected: (sel) {
+                                      if (sel) {
+                                        setState(() {
+                                          _repeatFrequency =
+                                              RepeatFrequency.monthly;
+                                          _dirty = true;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                              if (_repeatFrequency != null) ...[
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: [
+                                    Icon(Icons.event_busy_rounded,
+                                        size: 18,
+                                        color: context.penny.textMuted),
+                                    const SizedBox(width: 8),
+                                    Text('Repeat until (end date)',
+                                        style: context.text.titleSmall),
+                                    const Spacer(),
+                                    if (_repeatUntil != null)
+                                      TextButton(
+                                        onPressed: () => setState(() {
+                                          _repeatUntil = null;
+                                          _dirty = true;
+                                        }),
+                                        child: const Text('Forever'),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                InkWell(
+                                  onTap: () async {
+                                    final baseDate = DateTime.now();
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: _repeatUntil ??
+                                          baseDate.add(const Duration(days: 30)),
+                                      firstDate:
+                                          DateUtilsX.dateOnly(baseDate),
+                                      lastDate:
+                                          DateTime(baseDate.year + 5, 12, 31),
+                                      helpText:
+                                          'Select end date for repeat',
+                                    );
+                                    if (picked != null && mounted) {
+                                      setState(() {
+                                        _repeatUntil = DateTime(
+                                            picked.year,
+                                            picked.month,
+                                            picked.day,
+                                            23,
+                                            59,
+                                            59);
+                                        _dirty = true;
+                                      });
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: context
+                                          .colors.surfaceContainerHighest
+                                          .withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                          color:
+                                              context.colors.outlineVariant),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.calendar_today_rounded,
+                                            size: 16,
+                                            color: context.colors.primary),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            _repeatUntil != null
+                                                ? 'Ends on ${DateUtilsX.dayMonth(_repeatUntil!)}'
+                                                : 'Repeats forever (tap to set end date)',
+                                            style: context.text.bodyMedium,
+                                          ),
+                                        ),
+                                        Icon(Icons.edit_calendar_rounded,
+                                            size: 18,
+                                            color: context.penny.textMuted),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ],
                         ),
                       ),

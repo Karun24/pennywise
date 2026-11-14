@@ -19,6 +19,7 @@ import '../../widgets/common.dart';
 import '../../widgets/dialogs.dart';
 import '../../widgets/segmented.dart';
 import '../../widgets/update_widgets.dart';
+import '../debts/debts_screen.dart';
 import '../goals/goals_screen.dart';
 import '../notes/notes_screen.dart';
 import '../recurring/recurring_screen.dart';
@@ -62,6 +63,87 @@ class SettingsScreen extends StatelessWidget {
                     labelOf: (t) => t.label,
                     onChanged: (t) => _save(context, s.copyWith(theme: t)),
                   ),
+                  if (s.theme != AppThemePreference.light) ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Pure AMOLED Black',
+                          style: context.text.bodyMedium),
+                      subtitle: Text(
+                        'Pitch black background for OLED screens',
+                        style: context.text.bodySmall
+                            ?.copyWith(color: context.penny.textMuted),
+                      ),
+                      value: s.amoledDark,
+                      onChanged: (v) =>
+                          _save(context, s.copyWith(amoledDark: v)),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  Text('Accent color', style: context.text.titleSmall),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final accent in AppAccentColor.values)
+                        InkWell(
+                          onTap: () =>
+                              _save(context, s.copyWith(accentColor: accent)),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: s.accentColor == accent
+                                  ? Color(accent.primaryValue)
+                                      .withValues(alpha: 0.18)
+                                  : context.colors.surfaceContainerHighest
+                                      .withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: s.accentColor == accent
+                                    ? Color(accent.primaryValue)
+                                    : Colors.transparent,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: Color(accent.primaryValue),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: s.accentColor == accent
+                                      ? const Icon(Icons.check,
+                                          size: 11, color: Colors.white)
+                                      : null,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  accent.label,
+                                  style: context.text.labelMedium?.copyWith(
+                                    fontWeight: s.accentColor == accent
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: s.accentColor == accent
+                                        ? Color(accent.primaryValue)
+                                        : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -93,6 +175,14 @@ class SettingsScreen extends StatelessWidget {
                 title: 'Savings goals',
                 value: '${store.goals.length}',
                 onTap: () => GoalsScreen.open(context),
+              ),
+              _Tile(
+                icon: Icons.handshake_rounded,
+                title: 'Debts & split bills',
+                value: store.pendingDebts.isEmpty
+                    ? 'All settled'
+                    : '${store.pendingDebts.length} pending',
+                onTap: () => DebtsScreen.open(context),
               ),
               _Tile(
                 icon: Icons.account_balance_rounded,

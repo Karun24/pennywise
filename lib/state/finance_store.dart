@@ -814,7 +814,7 @@ class FinanceStore extends ChangeNotifier {
           date: stamp,
           note: txNote,
           paymentMethod: PaymentMethod.upi,
-          tags: const ['debt'],
+          tag: 'debt',
           createdAt: stamp,
           updatedAt: stamp,
         );

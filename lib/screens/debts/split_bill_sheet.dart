@@ -124,7 +124,7 @@ class _SplitBillSheetState extends State<_SplitBillSheet> {
               date: now,
               note: '$billTitle (My share)',
               paymentMethod: PaymentMethod.upi,
-              tags: const ['split-bill'],
+              tag: 'split-bill',
               createdAt: now,
               updatedAt: now,
             ),

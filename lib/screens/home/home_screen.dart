@@ -272,8 +272,14 @@ class _AccountsStrip extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text('Accounts & Wallets', style: context.text.titleSmall),
-            const Spacer(),
+            Expanded(
+              child: Text(
+                'Accounts & Wallets',
+                style: context.text.titleSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             TextButton(
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,

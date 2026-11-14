@@ -45,9 +45,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Total balance'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Welcome to PennyWise'), 100);
     expect(find.text('Welcome to PennyWise'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Explore with demo data'), 100);
     expect(find.text('Explore with demo data'), findsOneWidget);
   });
 
@@ -57,9 +55,7 @@ void main() {
     await tester.pumpWidget(PennyWiseApp(store: store));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('Smart insights'), 100);
     expect(find.text('Smart insights'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Last 7 days'), 100);
     expect(find.text('Last 7 days'), findsOneWidget);
 
     await tester.tap(_nav('Analytics'));
@@ -168,7 +164,6 @@ void main() {
     await tester.tap(find.text('New note'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'Lent money to Ravi');
-    await tester.scrollUntilVisible(find.text('Tomorrow 9 AM'), 100);
     await tester.tap(find.text('Tomorrow 9 AM'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save & set reminder'));
@@ -193,7 +188,7 @@ void main() {
     final settingsScrollable = find.descendant(
       of: find.byType(SettingsScreen),
       matching: find.byType(Scrollable),
-    );
+    ).first;
     await tester.scrollUntilVisible(find.text('App lock'), 200,
         scrollable: settingsScrollable);
     expect(find.text('Daily reminder'), findsOneWidget);
@@ -206,7 +201,7 @@ void main() {
     final addScrollable = find.descendant(
       of: find.byType(AddTransactionScreen),
       matching: find.byType(Scrollable),
-    );
+    ).first;
     await tester.scrollUntilVisible(find.text('Monthly'), 200,
         scrollable: addScrollable);
     await tester.tap(find.text('Monthly'));

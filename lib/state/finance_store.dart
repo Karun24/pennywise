@@ -84,13 +84,13 @@ class FinanceStore extends ChangeNotifier {
     }
     return _accounts.isNotEmpty
         ? _accounts.first
-        : const Account(
+        : Account(
             id: 1,
             name: 'Bank Account',
             iconKey: 'bank',
             colorValue: 0xFF4FC3F7,
-            createdAt: null as dynamic,
-            updatedAt: null as dynamic,
+            createdAt: now,
+            updatedAt: now,
           );
   }
 

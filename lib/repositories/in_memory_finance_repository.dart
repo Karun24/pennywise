@@ -82,6 +82,8 @@ class InMemoryFinanceRepository implements FinanceRepository {
   }
 
   // ---------------------------------------------------------------- categories
+  @override
+  Future<List<Category>> getCategories() async {
     final list = List<Category>.of(_categories)
       ..sort((a, b) => a.sortOrder != b.sortOrder
           ? a.sortOrder.compareTo(b.sortOrder)

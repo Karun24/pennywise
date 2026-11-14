@@ -401,6 +401,7 @@ void main() {
         categoryId: 1,
         note: 'Groceries with receipt',
         date: now,
+        paymentMethod: PaymentMethod.upi,
         receiptPath: '/app/receipts/bill_123.jpg',
         createdAt: now,
         updatedAt: now,
